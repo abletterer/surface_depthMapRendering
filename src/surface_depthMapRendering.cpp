@@ -18,7 +18,7 @@ bool Surface_DepthMapRendering_Plugin::enable()
 
 	m_depthShader = new CGoGN::Utils::ShaderDepth();
 
-	m_depthFBO = new CGoGN::Utils::FBO(m_schnapps->getSelectedView()->width(), m_schnapps->getSelectedView()->height());
+	m_depthFBO = new CGoGN::Utils::FBO(1024, 1024);
 	m_depthFBO->createAttachDepthTexture();
 	m_depthFBO->createAttachColorTexture(GL_RGBA);
 
@@ -32,8 +32,6 @@ bool Surface_DepthMapRendering_Plugin::enable()
 
 	connect(m_schnapps, SIGNAL(mapAdded(MapHandlerGen*)), this, SLOT(mapAdded(MapHandlerGen*)));
 	connect(m_schnapps, SIGNAL(mapRemoved(MapHandlerGen*)), this, SLOT(mapRemoved(MapHandlerGen*)));
-
-	m_cameraSet.push_back(m_schnapps->getSelectedView()->getCurrentCamera());
 
 	foreach(MapHandlerGen* map, m_schnapps->getMapSet().values())
 		mapAdded(map);
@@ -134,7 +132,50 @@ void Surface_DepthMapRendering_Plugin::changePositionVBO(const QString& view, co
 	}
 }
 
-void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
+void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int number)
+{
+	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
+	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
+
+	if(mh_map)
+	{
+		PFP2::MAP* map = mh_map->getMap();
+
+		QString base_name("DepthCamera-");
+
+		m_cameraSet.reserve(number);
+
+		for(int i = 0; i < number; ++i)
+		{
+			QString camera_name(base_name);
+			camera_name.append(QString::number(i));
+			Camera* camera = m_schnapps->addCamera(camera_name);
+
+			qglviewer::Vec bb_min = mh_map->getBBmin();
+			qglviewer::Vec bb_max = mh_map->getBBmax();
+
+			qglviewer::Vec center = (bb_min+bb_max)/2.f;
+
+			camera->setSceneBoundingBox(bb_min,bb_max);
+			camera->showEntireScene();
+
+			qglviewer::Vec camera_position(camera->position());
+
+			float radius = qAbs(camera_position.z - center.z);
+
+			camera_position.x = center.x + radius*std::cos(M_PI/(number/2)*i);
+			camera_position.y = center.y;
+			camera_position.z = center.z + radius*std::sin(M_PI/(number/2)*i);
+
+			camera->setPosition(camera_position);
+
+			camera->lookAt(center);
+			m_cameraSet.push_back(camera);
+		}
+	}
+}
+
+void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QString& directory)
 {
 	if(m_depthShader)
 	{
@@ -160,10 +201,38 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 
 				m_depthShader->setAttributePosition(m_mapParameterSet[mhg_map].positionVBO);
 
+				int width = m_depthFBO->getWidth(), height = m_depthFBO->getHeight();
+
+				QImage image(width, height, QImage::Format_RGB32);
+
+				m_schnapps->getSelectedView()->setCurrentCamera(*cam);
+
 				m_depthFBO->bind();
 				glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To get a clean texture (black background)
 				mhg_map->draw(m_depthShader, CGoGN::Algo::Render::GL2::TRIANGLES);	//Render the map into the FrameBufferObject
+
+				//Read pixels of the generated texture and store them in a vector
+				glReadPixels(0, 0, m_depthFBO->getWidth(), m_depthFBO->getHeight(), GL_RGBA, GL_UNSIGNED_BYTE, image.bits());
 				m_depthFBO->unbind();
+
+				image = image.mirrored();
+
+				QString filename(directory);
+				filename.append("/");
+				filename.append(mapName);
+				filename.append("/");
+
+				mkdir(filename.toStdString().c_str(), 0777);
+
+				filename.append(mapName);
+				filename.append("-");
+				filename.append((*cam)->getName());
+				filename.append(".png");
+
+				if(!image.save(filename))
+				{
+					CGoGNerr << "Image '" << filename.toStdString() << "' has not been saved" << CGoGNendl;
+				}
 			}
 		}
 	}

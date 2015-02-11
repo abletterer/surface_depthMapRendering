@@ -69,7 +69,10 @@ private slots:
 public slots: //Python calls
 
 	void changePositionVBO(const QString& view, const QString& map, const QString& vbo);
-	void render(const QString& mapName);
+
+	void createCameras(const QString& mapName, int number = 4);
+
+	void render(const QString& mapName, const QString& directory = "/home/blettere/Projets/Models/DepthMaps");
 
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;
