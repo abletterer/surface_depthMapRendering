@@ -9,6 +9,10 @@
 #include "Utils/Shaders/shaderDepth.h"
 #include "Utils/fbo.h"
 
+#include "Algo/Tiling/Surface/square.h"
+
+#include "imageCoordinates.h"
+
 namespace CGoGN
 {
 
@@ -22,6 +26,10 @@ struct MapParameters
 	{}
 
 	Utils::VBO* positionVBO;
+
+	QHash<QString, Camera*> depthCameraSet;
+	QHash<QString, QImage> depthImageSet;
+	QHash<QString, MapHandlerGen*> projectedMapSet;
 };
 
 class Surface_DepthMapRendering_Plugin : public PluginInteraction
@@ -74,6 +82,8 @@ public slots: //Python calls
 
 	void render(const QString& mapName, const QString& directory = "/home/blettere/Projets/Models/DepthMaps");
 
+	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
+
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;
 	QAction* m_depthMapRenderingAction;
@@ -82,8 +92,6 @@ private:
 
 	CGoGN::Utils::ShaderDepth* m_depthShader;
 	CGoGN::Utils::FBO* m_depthFBO;
-
-	std::vector<Camera*> m_cameraSet;
 };
 
 } // namespace SCHNApps
