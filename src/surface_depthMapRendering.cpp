@@ -22,6 +22,8 @@ bool Surface_DepthMapRendering_Plugin::enable()
 	m_depthFBO->createAttachDepthTexture();
 	m_depthFBO->createAttachColorTexture(GL_RGBA);
 
+	m_draw = false;
+
 	registerShader(m_depthShader);
 
 	connect(m_depthMapRenderingAction, SIGNAL(triggered()), this, SLOT(openDepthMapRenderingDialog()));
@@ -62,17 +64,17 @@ void Surface_DepthMapRendering_Plugin::disable()
 
 void Surface_DepthMapRendering_Plugin::drawMap(View* view, MapHandlerGen* map)
 {
-	if(m_depthShader && m_mapParameterSet.contains(map))
-	{
-		float near = view->getCurrentCamera()->zNear();
-		float far = view->getCurrentCamera()->zFar();
+//	if(m_depthShader && m_mapParameterSet.contains(map))
+//	{
+//		float near = view->getCurrentCamera()->zNear();
+//		float far = view->getCurrentCamera()->zFar();
 
-		m_depthShader->setZMin(near/far);
-		m_depthShader->setZMax(1.);
-		m_depthShader->setAttributePosition(m_mapParameterSet[map].positionVBO);
+//		m_depthShader->setZMin(near/far);
+//		m_depthShader->setZMax(1.);
+//		m_depthShader->setAttributePosition(m_mapParameterSet[map].positionVBO);
 
-		map->draw(m_depthShader, CGoGN::Algo::Render::GL2::TRIANGLES);
-	}
+//		map->draw(m_depthShader, CGoGN::Algo::Render::GL2::TRIANGLES);
+//	}
 }
 
 void Surface_DepthMapRendering_Plugin::openDepthMapRenderingDialog()
@@ -169,6 +171,8 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 
 			camera->lookAt(center);
 
+			CGoGNout << camera->position().x << " | " << camera->position().y << " | " << camera->position().z << CGoGNendl;
+
 			QString generatedName(mapName);
 			generatedName.append("-");
 			generatedName.append(cameraName);
@@ -215,38 +219,40 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 				int width = m_depthFBO->getWidth(), height = m_depthFBO->getHeight();
 
-				QImage image(width, height, QImage::Format_RGB32);
+				std::vector<GLfloat> pixels;
+				pixels.resize(width*height);
 
 				m_schnapps->getSelectedView()->setCurrentCamera(camera);
 
 				m_depthFBO->bind();
 				glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To get a clean texture (black background)
-				mhg_map->draw(m_depthShader, CGoGN::Algo::Render::GL2::TRIANGLES);	//Render the map into the FrameBufferObject
+				mh_map->draw(m_depthShader, CGoGN::Algo::Render::GL2::TRIANGLES);	//Render the map into the FrameBufferObject
 
 				//Read pixels of the generated texture and store them in an image
-				glReadPixels(0, 0, m_depthFBO->getWidth(), m_depthFBO->getHeight(), GL_RGBA, GL_UNSIGNED_BYTE, image.bits());
+				glBindTexture(GL_TEXTURE_2D, *m_depthFBO->getDepthTexId());
+				glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
 				m_depthFBO->unbind();
 
-				image = image.mirrored();
+				mapParam.depthImageSet[generatedName] = pixels;
 
-				mapParam.depthImageSet[generatedName] = image;
+//				QImage image(width ,height, QImage::Format_RGB32);
 
-				QString filename(directory);
-				filename.append("/");
-				filename.append(mapName);
-				filename.append("/");
+//				QString filename(directory);
+//				filename.append("/");
+//				filename.append(mapName);
+//				filename.append("/");
 
-				mkdir(filename.toStdString().c_str(), 0777);
+//				mkdir(filename.toStdString().c_str(), 0777);
 
-				filename.append(mapName);
-				filename.append("-");
-				filename.append(cameraName);
-				filename.append(".png");
+//				filename.append(mapName);
+//				filename.append("-");
+//				filename.append(cameraName);
+//				filename.append(".png");
 
-				if(!image.save(filename))
-				{
-					CGoGNerr << "Image '" << filename.toStdString() << "' has not been saved" << CGoGNendl;
-				}
+//				if(!image.save(filename))
+//				{
+//					CGoGNerr << "Image '" << filename.toStdString() << "' has not been saved" << CGoGNendl;
+//				}
 
 				MapHandlerGen* mhg_generated = m_schnapps->addMap(generatedName, 2);
 				mapParam.projectedMapSet[generatedName] = mhg_generated;
@@ -279,7 +285,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 						planeCoordinatesGenerated[vDarts[j*width+i]][0] /= (width-1)/2.f;
 						planeCoordinatesGenerated[vDarts[j*width+i]][1] /= (height-1)/2.f;
 
-						imageCoordinatesGenerated[vDarts[j*width+i]].setCoordinates(i, height-j-1);
+						imageCoordinatesGenerated[vDarts[j*width+i]].setCoordinates(i, j);
 					}
 				}
 
@@ -327,15 +333,7 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		}
 
 		Camera* camera = mapParam.depthCameraSet[mapGenerated];
-		QImage image = mapParam.depthImageSet[mapGenerated];
-
-		qglviewer::Vec camera_p = camera->position();
-		PFP2::VEC3 camera_position = PFP2::VEC3(camera_p.x, camera_p.y, camera_p.z);
-
-		PFP2::VEC3 plane_center_position = camera_position;
-		plane_center_position[2] -= camera->zNear();
-
-//		float d_C_Xc = (plane_center_position-camera_position).norm2();
+		std::vector<GLfloat> pixels = mapParam.depthImageSet[mapGenerated];
 
 		GLdouble p_matrix[16], mv_matrix[16];
 		camera->getProjectionMatrix(p_matrix);
@@ -352,16 +350,38 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 			}
 		}
 
-		float near = camera->zNear();
-		float far = camera->zFar();
-
 		projection_matrix.invert(projection_matrix_inv);
 		model_view_matrix.invert(model_view_matrix_inv);
+
+//		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
+//		Dart next;
+//		bool stop = false;
+//		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
+//		{
+//			next = trav_face_map.next();
+//			stop = false;
+//			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
+//			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
+//			{
+//				float color = pixels[imageCoordinatesGenerated[d].getXCoordinate()+m_depthFBO->getWidth()*imageCoordinatesGenerated[d].getYCoordinate()];
+//				if(qAbs(1-color)<0.1)
+//				{
+//					generated_map->deleteFace(d);
+//					stop = true;
+//				}
+//				else
+//				{
+//					CGoGNout << color << CGoGNendl;
+//				}
+//			}
+//		}
 
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
-			float color = 1-qRed(image.pixel(imageCoordinatesGenerated[d].getXCoordinate(), imageCoordinatesGenerated[d].getYCoordinate()))/255.f;
+			float color = pixels[imageCoordinatesGenerated[d].getXCoordinate()+m_depthFBO->getWidth()*imageCoordinatesGenerated[d].getYCoordinate()];
+
+			color = 2*color-1;
 
 			PFP2::VEC4 pos = PFP2::VEC4(planeCoordinatesGenerated[d][0], planeCoordinatesGenerated[d][1], color, 1.f);
 

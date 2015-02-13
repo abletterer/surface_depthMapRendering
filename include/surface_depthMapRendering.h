@@ -28,7 +28,7 @@ struct MapParameters
 	Utils::VBO* positionVBO;
 
 	QHash<QString, Camera*> depthCameraSet;
-	QHash<QString, QImage> depthImageSet;
+	QHash<QString, std::vector<GLfloat>> depthImageSet;
 	QHash<QString, MapHandlerGen*> projectedMapSet;
 };
 
@@ -79,9 +79,7 @@ public slots: //Python calls
 	void changePositionVBO(const QString& view, const QString& map, const QString& vbo);
 
 	void createCameras(const QString& mapName, int number = 4);
-
 	void render(const QString& mapName, const QString& directory = "/home/blettere/Projets/Models/DepthMaps");
-
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
 
 private:
@@ -92,6 +90,8 @@ private:
 
 	CGoGN::Utils::ShaderDepth* m_depthShader;
 	CGoGN::Utils::FBO* m_depthFBO;
+
+	bool m_draw;
 };
 
 } // namespace SCHNApps
