@@ -16,15 +16,11 @@ bool Surface_DepthMapRendering_Plugin::enable()
 
 	m_schnapps->addMenuAction(this, "Surface;Depth-map rendering", m_depthMapRenderingAction);
 
-	m_depthShader = new CGoGN::Utils::ShaderDepth();
-
-	m_depthFBO = new CGoGN::Utils::FBO(256, 256);
-	m_depthFBO->createAttachDepthTexture();
-	m_depthFBO->createAttachColorTexture(GL_RGBA);
-
 	m_draw = false;
 
-	registerShader(m_depthShader);
+	m_shader = new CGoGN::Utils::ShaderSimpleColor();
+
+	registerShader(m_shader);
 
 	connect(m_depthMapRenderingAction, SIGNAL(triggered()), this, SLOT(openDepthMapRenderingDialog()));
 
@@ -43,9 +39,9 @@ bool Surface_DepthMapRendering_Plugin::enable()
 
 void Surface_DepthMapRendering_Plugin::disable()
 {
-	if(m_depthShader)
+	if(m_shader)
 	{
-		delete m_depthShader;
+		delete m_shader;
 	}
 	if(m_depthFBO)
 	{
@@ -119,6 +115,13 @@ void Surface_DepthMapRendering_Plugin::vboRemoved(Utils::VBO *vbo)
 	}
 }
 
+void Surface_DepthMapRendering_Plugin::createFBO(int width, int height)
+{
+	m_depthFBO = new CGoGN::Utils::FBO(width, height);
+	m_depthFBO->createAttachDepthTexture();
+	m_depthFBO->createAttachColorTexture(GL_RGBA);
+}
+
 void Surface_DepthMapRendering_Plugin::changePositionVBO(const QString& view, const QString& map, const QString& vbo)
 {
 	View* v = m_schnapps->getView(view);
@@ -184,56 +187,51 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 
 void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QString& directory)
 {
-	if(m_depthShader)
+	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
+	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
+
+	if(m_depthFBO && mh_map && m_mapParameterSet.contains(mhg_map))
 	{
-		MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
-		MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
-
-		if(mh_map && m_mapParameterSet.contains(mhg_map))
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_map->getAttribute<PFP2::VEC3, VERTEX>("position");
+		if(!position.isValid())
 		{
-			VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_map->getAttribute<PFP2::VEC3, VERTEX>("position");
-			if(!position.isValid())
-			{
-				CGoGNerr << "position attribute is not valid" << CGoGNendl;
-				return;
-			}
+			CGoGNerr << "position attribute is not valid" << CGoGNendl;
+			return;
+		}
 
-			MapParameters& mapParam = m_mapParameterSet[mhg_map];
+		MapParameters& mapParam = m_mapParameterSet[mhg_map];
 
-			for(QHash<QString, Camera*>::iterator it = mapParam.depthCameraSet.begin(); it != mapParam.depthCameraSet.end(); ++it)
-			{
-				Camera* camera = it.value();
-				QString cameraName(camera->getName());
+		for(QHash<QString, Camera*>::iterator it = mapParam.depthCameraSet.begin(); it != mapParam.depthCameraSet.end(); ++it)
+		{
+			Camera* camera = it.value();
+			QString cameraName(camera->getName());
 
-				QString generatedName(mapName);
-				generatedName.append("-");
-				generatedName.append(cameraName);
+			QString generatedName(mapName);
+			generatedName.append("-");
+			generatedName.append(cameraName);
 
-				float near = camera->zNear();
-				float far = camera->zFar();
+			float near = camera->zNear();
+			float far = camera->zFar();
 
-				m_depthShader->setZMin(near/far);
-				m_depthShader->setZMax(1.);
+			int width = m_depthFBO->getWidth(), height = m_depthFBO->getHeight();
 
-				m_depthShader->setAttributePosition(m_mapParameterSet[mhg_map].positionVBO);
+			std::vector<GLfloat> pixels;
+			pixels.resize(width*height);
 
-				int width = m_depthFBO->getWidth(), height = m_depthFBO->getHeight();
+			m_schnapps->getSelectedView()->setCurrentCamera(camera);
 
-				std::vector<GLfloat> pixels;
-				pixels.resize(width*height);
+			m_shader->setAttributePosition(mapParam.positionVBO);
 
-				m_schnapps->getSelectedView()->setCurrentCamera(camera);
+			m_depthFBO->bind();
+			glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To get a clean texture (black background)
+			mh_map->draw(m_shader, CGoGN::Algo::Render::GL2::TRIANGLES);	//Render the map into the FrameBufferObject
 
-				m_depthFBO->bind();
-				glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To get a clean texture (black background)
-				mh_map->draw(m_depthShader, CGoGN::Algo::Render::GL2::TRIANGLES);	//Render the map into the FrameBufferObject
+			//Read pixels of the generated texture and store them in an image
+			glBindTexture(GL_TEXTURE_2D, *m_depthFBO->getDepthTexId());
+			glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
+			m_depthFBO->unbind();
 
-				//Read pixels of the generated texture and store them in an image
-				glBindTexture(GL_TEXTURE_2D, *m_depthFBO->getDepthTexId());
-				glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
-				m_depthFBO->unbind();
-
-				mapParam.depthImageSet[generatedName] = pixels;
+			mapParam.depthImageSet[generatedName] = pixels;
 
 //				QImage image(width ,height, QImage::Format_RGB32);
 
@@ -254,47 +252,46 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 //					CGoGNerr << "Image '" << filename.toStdString() << "' has not been saved" << CGoGNendl;
 //				}
 
-				MapHandlerGen* mhg_generated = m_schnapps->addMap(generatedName, 2);
-				mapParam.projectedMapSet[generatedName] = mhg_generated;
+			MapHandlerGen* mhg_generated = m_schnapps->addMap(generatedName, 2);
+			mapParam.projectedMapSet[generatedName] = mhg_generated;
 
-				MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
-				PFP2::MAP* generated_map = mh_generated->getMap();
+			MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
+			PFP2::MAP* generated_map = mh_generated->getMap();
 
-				VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
-				if(!planeCoordinatesGenerated.isValid())
-				{
-					planeCoordinatesGenerated = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
-				}
-
-				VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesGenerated = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
-				if(!imageCoordinatesGenerated.isValid())
-				{
-					imageCoordinatesGenerated = mh_generated->addAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
-				}
-
-				Algo::Surface::Tilings::Square::Grid<PFP2> grid(*generated_map, width-1, height-1);
-				grid.embedIntoGrid(planeCoordinatesGenerated, width-1, height-1);
-
-				std::vector<Dart> vDarts = grid.getVertexDarts();
-
-				for(int i = 0; i < width; ++i)
-				{
-					for(int j = 0; j < height; ++j)
-					{
-						//Set planeCoordinates in [-1;1]
-						planeCoordinatesGenerated[vDarts[j*width+i]][0] /= (width-1)/2.f;
-						planeCoordinatesGenerated[vDarts[j*width+i]][1] /= (height-1)/2.f;
-
-						imageCoordinatesGenerated[vDarts[j*width+i]].setCoordinates(i, j);
-					}
-				}
-
-				mh_generated->notifyConnectivityModification();
-				mh_generated->updateBB(planeCoordinatesGenerated);
-				mh_generated->notifyAttributeModification(planeCoordinatesGenerated);
-				mh_generated->notifyAttributeModification(imageCoordinatesGenerated);
-				project2DImageTo3DSpace(mapName, generatedName);
+			VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
+			if(!planeCoordinatesGenerated.isValid())
+			{
+				planeCoordinatesGenerated = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
 			}
+
+			VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesGenerated = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
+			if(!imageCoordinatesGenerated.isValid())
+			{
+				imageCoordinatesGenerated = mh_generated->addAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
+			}
+
+			Algo::Surface::Tilings::Square::Grid<PFP2> grid(*generated_map, width-1, height-1);
+			grid.embedIntoGrid(planeCoordinatesGenerated, width-1, height-1);
+
+			std::vector<Dart> vDarts = grid.getVertexDarts();
+
+			for(int i = 0; i < width; ++i)
+			{
+				for(int j = 0; j < height; ++j)
+				{
+					//Set planeCoordinates in [-1;1]
+					planeCoordinatesGenerated[vDarts[j*width+i]][0] /= (width-1)/2.f;
+					planeCoordinatesGenerated[vDarts[j*width+i]][1] /= (height-1)/2.f;
+
+					imageCoordinatesGenerated[vDarts[j*width+i]].setCoordinates(i, j);
+				}
+			}
+
+			mh_generated->notifyConnectivityModification();
+			mh_generated->updateBB(planeCoordinatesGenerated);
+			mh_generated->notifyAttributeModification(planeCoordinatesGenerated);
+			mh_generated->notifyAttributeModification(imageCoordinatesGenerated);
+			project2DImageTo3DSpace(mapName, generatedName);
 		}
 	}
 }
@@ -307,7 +304,7 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
 	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
 
-	if(mh_origin && mh_generated && m_mapParameterSet.contains(mhg_origin))
+	if(m_depthFBO && mh_origin && mh_generated && m_mapParameterSet.contains(mhg_origin))
 	{
 		MapParameters& mapParam = m_mapParameterSet[mhg_origin];
 		PFP2::MAP* generated_map = mh_generated->getMap();

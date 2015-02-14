@@ -6,7 +6,7 @@
 #include "camera.h"
 
 #include "dialog_surface_depthMapRendering.h"
-#include "Utils/Shaders/shaderDepth.h"
+#include "Utils/Shaders/shaderSimpleColor.h"
 #include "Utils/fbo.h"
 
 #include "Algo/Tiling/Surface/square.h"
@@ -76,6 +76,8 @@ private slots:
 
 public slots: //Python calls
 
+	void createFBO(int width, int height);
+
 	void changePositionVBO(const QString& view, const QString& map, const QString& vbo);
 
 	void createCameras(const QString& mapName, int number = 4);
@@ -88,8 +90,8 @@ private:
 
 	QHash<MapHandlerGen*, MapParameters> m_mapParameterSet;
 
-	CGoGN::Utils::ShaderDepth* m_depthShader;
 	CGoGN::Utils::FBO* m_depthFBO;
+	CGoGN::Utils::ShaderSimpleColor* m_shader;
 
 	bool m_draw;
 };
