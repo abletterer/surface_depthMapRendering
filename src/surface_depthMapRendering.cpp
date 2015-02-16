@@ -299,16 +299,14 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			}
 
 			mh_generated->notifyConnectivityModification();
-//			mh_generated->notifyAttributeModification(planeCoordinatesGenerated);
-//			mh_generated->notifyAttributeModification(imageCoordinatesGenerated);
+			mh_generated->notifyAttributeModification(planeCoordinatesGenerated);
+			mh_generated->notifyAttributeModification(imageCoordinatesGenerated);
 			project2DImageTo3DSpace(mapName, generatedName);
 		}
 
 		CGoGNout << "Temps d'échantillonnage : " << chrono.elapsed() << " ms " << CGoGNflush;
 		CGoGNout << "pour " << mapParam.depthCameraSet.size() << " vue(s) différente(s) " << CGoGNflush;
 		CGoGNout << "de taille " << width << "x" << height << CGoGNendl;
-
-		m_schnapps->getSelectedView()->updateGL();
 	}
 }
 
@@ -394,7 +392,7 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		}
 
 		mh_generated->updateBB(positionGenerated);
-//		mh_generated->notifyAttributeModification(positionGenerated);
+		mh_generated->notifyAttributeModification(positionGenerated);
 	}
 }
 
