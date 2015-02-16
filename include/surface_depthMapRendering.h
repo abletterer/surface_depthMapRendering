@@ -8,6 +8,7 @@
 #include "dialog_surface_depthMapRendering.h"
 #include "Utils/Shaders/shaderSimpleColor.h"
 #include "Utils/fbo.h"
+#include "Utils/chrono.h"
 
 #include "Algo/Tiling/Surface/square.h"
 
@@ -80,7 +81,7 @@ public slots: //Python calls
 
 	void changePositionVBO(const QString& view, const QString& map, const QString& vbo);
 
-	void createCameras(const QString& mapName, int number = 4);
+	void createCameras(const QString& mapName);
 	void render(const QString& mapName, const QString& directory = "/home/blettere/Projets/Models/DepthMaps");
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
 
