@@ -24,9 +24,11 @@ bool Surface_DepthMapRendering_Plugin::enable()
 
 	connect(m_depthMapRenderingAction, SIGNAL(triggered()), this, SLOT(openDepthMapRenderingDialog()));
 
-	connect(m_depthMapRenderingDialog, SIGNAL(accepted()), this, SLOT(renderFromDialog()));
+	connect(m_depthMapRenderingDialog, SIGNAL(accepted()), this, SLOT(closeDepthMapRenderingDialog()));
 	connect(m_depthMapRenderingDialog->button_cancel, SIGNAL(clicked()), this, SLOT(closeDepthMapRenderingDialog()));
-	connect(m_depthMapRenderingDialog->button_ok, SIGNAL(clicked()), this, SLOT(renderFromDialog()));
+	connect(m_depthMapRenderingDialog->button_ok, SIGNAL(clicked()), this, SLOT(closeDepthMapRenderingDialog()));
+	connect(m_depthMapRenderingDialog->button_moveDown, SIGNAL(clicked()), this, SLOT(moveDownFromDialog()));
+	connect(m_depthMapRenderingDialog->button_moveUp, SIGNAL(clicked()), this, SLOT(moveUpFromDialog()));
 
 	connect(m_schnapps, SIGNAL(mapAdded(MapHandlerGen*)), this, SLOT(mapAdded(MapHandlerGen*)));
 	connect(m_schnapps, SIGNAL(mapRemoved(MapHandlerGen*)), this, SLOT(mapRemoved(MapHandlerGen*)));
@@ -50,27 +52,14 @@ void Surface_DepthMapRendering_Plugin::disable()
 
 	disconnect(m_depthMapRenderingAction, SIGNAL(triggered()), this, SLOT(openDepthMapRenderingDialog()));
 
-	disconnect(m_depthMapRenderingDialog, SIGNAL(accepted()), this, SLOT(renderFromDialog()));
+	disconnect(m_depthMapRenderingDialog, SIGNAL(accepted()), this, SLOT(closeDepthMapRenderingDialog()));
 	disconnect(m_depthMapRenderingDialog->button_cancel, SIGNAL(clicked()), this, SLOT(closeDepthMapRenderingDialog()));
-	disconnect(m_depthMapRenderingDialog->button_ok, SIGNAL(clicked()), this, SLOT(renderFromDialog()));
+	disconnect(m_depthMapRenderingDialog->button_ok, SIGNAL(clicked()), this, SLOT(closeDepthMapRenderingDialog()));
+	disconnect(m_depthMapRenderingDialog->button_moveDown, SIGNAL(clicked()), this, SLOT(moveDownFromDialog()));
+	disconnect(m_depthMapRenderingDialog->button_moveUp, SIGNAL(clicked()), this, SLOT(moveUpFromDialog()));
 
 	disconnect(m_schnapps, SIGNAL(mapAdded(MapHandlerGen*)), this, SLOT(mapAdded(MapHandlerGen*)));
 	disconnect(m_schnapps, SIGNAL(mapRemoved(MapHandlerGen*)), this, SLOT(mapRemoved(MapHandlerGen*)));
-}
-
-void Surface_DepthMapRendering_Plugin::drawMap(View* view, MapHandlerGen* map)
-{
-//	if(m_depthShader && m_mapParameterSet.contains(map))
-//	{
-//		float near = view->getCurrentCamera()->zNear();
-//		float far = view->getCurrentCamera()->zFar();
-
-//		m_depthShader->setZMin(near/far);
-//		m_depthShader->setZMax(1.);
-//		m_depthShader->setAttributePosition(m_mapParameterSet[map].positionVBO);
-
-//		map->draw(m_depthShader, CGoGN::Algo::Render::GL2::TRIANGLES);
-//	}
 }
 
 void Surface_DepthMapRendering_Plugin::openDepthMapRenderingDialog()
@@ -83,12 +72,23 @@ void Surface_DepthMapRendering_Plugin::closeDepthMapRenderingDialog()
 	m_depthMapRenderingDialog->close();
 }
 
-void Surface_DepthMapRendering_Plugin::renderFromDialog()
+void Surface_DepthMapRendering_Plugin::moveDownFromDialog()
 {
 	QList<QListWidgetItem*> currentItems = m_depthMapRenderingDialog->list_maps->selectedItems();
-	if(!currentItems.empty())
+	QList<QListWidgetItem*> currentItemsGenerated = m_depthMapRenderingDialog->list_maps_generated->selectedItems();
+	if(!currentItems.empty() && !currentItemsGenerated.empty())
 	{
-		render(currentItems[0]->text());
+		moveDownDecomposition(currentItems[0]->text(), currentItemsGenerated[0]->text());
+	}
+}
+
+void Surface_DepthMapRendering_Plugin::moveUpFromDialog()
+{
+	QList<QListWidgetItem*> currentItems = m_depthMapRenderingDialog->list_maps->selectedItems();
+	QList<QListWidgetItem*> currentItemsGenerated = m_depthMapRenderingDialog->list_maps_generated->selectedItems();
+	if(!currentItems.empty() && !currentItemsGenerated.empty())
+	{
+		moveUpDecomposition(currentItems[0]->text(), currentItemsGenerated[0]->text());
 	}
 }
 
@@ -166,7 +166,7 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName)
 		positions.push_back(qglviewer::Vec(-2,0,1));
 		positions.push_back(qglviewer::Vec(-2,0,-1));
 
-		for(int i = 0; i < 12; ++i)
+		for(int i = 0; i < 1; ++i)
 		{
 			QString cameraName(baseName);
 			cameraName.append(QString::number(i));
@@ -250,7 +250,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
 			m_depthFBO->unbind();
 
-			mapParam.depthImageSet[generatedName] = pixels;
+			m_schnapps->getSelectedView()->setCurrentCamera("camera_0");
 
 //				QImage image(width ,height, QImage::Format_RGB32);
 
@@ -274,17 +274,18 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			MapHandlerGen* mhg_generated = m_schnapps->addMap(generatedName, 2);
 			mapParam.projectedMapSet[generatedName] = mhg_generated;
 
+			mapParam.decompositionLevel[generatedName] = 0;
+
 			MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
 			PFP2::MAP* generated_map = mh_generated->getMap();
 
 			VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
-
 			VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesGenerated = mh_generated->addAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 
 			Algo::Surface::Tilings::Square::Grid<PFP2> grid(*generated_map, width-1, height-1);
 			grid.embedIntoGrid(planeCoordinatesGenerated, width-1, height-1);
 
-			std::vector<Dart> vDarts = grid.getVertexDarts();
+			std::vector<Dart>& vDarts = grid.getVertexDarts();
 
 			for(int i = 0; i < width; ++i)
 			{
@@ -295,18 +296,23 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 					planeCoordinatesGenerated[vDarts[j*width+i]][1] /= (height-1)/2.f;
 
 					imageCoordinatesGenerated[vDarts[j*width+i]].setCoordinates(i, j);
+					pixels[i+width*j] = 2*pixels[i+width*j]-1;
 				}
 			}
 
-			mh_generated->notifyConnectivityModification();
-			mh_generated->notifyAttributeModification(planeCoordinatesGenerated);
-			mh_generated->notifyAttributeModification(imageCoordinatesGenerated);
+			mapParam.depthImageSet[generatedName] = pixels;
+
+			mh_generated->notifyConnectivityModification(false);
+			mh_generated->notifyAttributeModification(planeCoordinatesGenerated, false);
+			mh_generated->notifyAttributeModification(imageCoordinatesGenerated, false);
 			project2DImageTo3DSpace(mapName, generatedName);
 		}
 
 		CGoGNout << "Temps d'échantillonnage : " << chrono.elapsed() << " ms " << CGoGNflush;
 		CGoGNout << "pour " << mapParam.depthCameraSet.size() << " vue(s) différente(s) " << CGoGNflush;
 		CGoGNout << "de taille " << width << "x" << height << CGoGNendl;
+
+		m_schnapps->getSelectedView()->updateGL();
 	}
 }
 
@@ -323,7 +329,11 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		MapParameters& mapParam = m_mapParameterSet[mhg_origin];
 		PFP2::MAP* generated_map = mh_generated->getMap();
 
-		VertexAttribute<PFP2::VEC3, PFP2::MAP> positionGenerated = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("position");
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> positionGenerated = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
+		if(!positionGenerated.isValid())
+		{
+			positionGenerated = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("position");
+		}
 
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
 		if(!planeCoordinatesGenerated.isValid())
@@ -342,25 +352,25 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		Camera* camera = mapParam.depthCameraSet[mapGenerated];
 		std::vector<GLfloat> pixels = mapParam.depthImageSet[mapGenerated];
 
-		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
-		Dart next;
-		bool stop = false;
-		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
-		{
+//		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
+//		Dart next;
+//		bool stop = false;
+//		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
+//		{
 
-			next = trav_face_map.next();
-			stop = false;
-			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
-			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
-			{
-				float color = pixels[imageCoordinatesGenerated[dd].getXCoordinate()+m_depthFBO->getWidth()*imageCoordinatesGenerated[dd].getYCoordinate()];
-				if(fabs(1-color)<FLT_EPSILON)
-				{
-					generated_map->deleteFace(d);
-					stop = true;
-				}
-			}
-		}
+//			next = trav_face_map.next();
+//			stop = false;
+//			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
+//			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
+//			{
+//				float color = pixels[imageCoordinatesGenerated[dd].getXCoordinate()+m_depthFBO->getWidth()*imageCoordinatesGenerated[dd].getYCoordinate()];
+//				if(fabs(1-color)<FLT_EPSILON)
+//				{
+//					generated_map->deleteFace(d);
+//					stop = true;
+//				}
+//			}
+//		}
 
 		GLdouble mvp_matrix[16];
 		camera->getModelViewProjectionMatrix(mvp_matrix);
@@ -382,8 +392,6 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		{
 			float color = pixels[imageCoordinatesGenerated[d].getXCoordinate()+m_depthFBO->getWidth()*imageCoordinatesGenerated[d].getYCoordinate()];
 
-			color = 2*color-1;
-
 			PFP2::VEC4 pos = PFP2::VEC4(planeCoordinatesGenerated[d][0], planeCoordinatesGenerated[d][1], color, 1.f);
 
 			pos = model_view_projection_matrix_inv*pos;
@@ -392,8 +400,160 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		}
 
 		mh_generated->updateBB(positionGenerated);
-		mh_generated->notifyAttributeModification(positionGenerated);
+		mh_generated->notifyAttributeModification(positionGenerated, false);
 	}
+}
+
+bool Surface_DepthMapRendering_Plugin::moveDownDecomposition(const QString& mapOrigin, const QString& mapGenerated)
+{
+	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(m_schnapps->getMap(mapOrigin));
+	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(m_schnapps->getMap(mapGenerated));
+
+	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
+	{
+		MapParameters& mapParam = m_mapParameterSet[mh_origin];
+		PFP2::MAP* generated_map = mh_generated->getMap();
+
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
+		if(!planeCoordinatesGenerated.isValid())
+		{
+			CGoGNerr << "PlaneCoordinates attribute is not valid" << CGoGNendl;
+			return false;
+		}
+
+		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesGenerated = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
+		if(!imageCoordinatesGenerated.isValid())
+		{
+			CGoGNerr << "ImageCoordinates attribute is not valid" << CGoGNendl;
+			return false;
+		}
+
+		int img_width = m_depthFBO->getWidth();
+		int img_height = m_depthFBO->getHeight();
+
+		int& level = mapParam.decompositionLevel[mapGenerated];
+
+		int l_p = pow(2, level);
+
+		int current_width = img_width/l_p;
+		int current_height = img_height/l_p;
+
+		if(current_width < 8 || current_height < 8)
+		{
+			return false;
+		}
+
+		generated_map->clear(false);
+
+		std::vector<GLfloat>& matrix = mapParam.depthImageSet[mapGenerated];
+
+		std::vector<GLfloat> matrix2 = std::vector<GLfloat>(matrix);
+
+		for(int i = 0; i < current_width; ++i)
+		{
+			for(int j = 0; j < current_height; ++j)
+			{
+				if(i%2==0)
+				{
+					matrix[i/2+img_width*j] = matrix2[i+img_width*j];
+				}
+				else
+				{
+					int left = matrix2[i-1+img_width*j];
+					int result = matrix2[i+img_width*j];
+					if(i != current_width-1)
+					{
+						int right = matrix2[i+1+img_width*j];
+						result -= (left+right)/2.f;
+						matrix[current_width/2+i/2+img_width*j] = result;
+					}
+					else
+					{
+						result -= left;
+						matrix[current_width/2+i/2+img_width*j] = result;
+					}
+				}
+			}
+		}
+
+		matrix2 = std::vector<GLfloat>(matrix);
+
+		for(int i = 0; i < current_width; ++i)
+		{
+			for(int j = 0; j < current_height; ++j)
+			{
+				if(j%2==0)
+				{
+					matrix[i+img_width*(j/2)] = matrix2[i+img_width*j];
+				}
+				else
+				{
+					int top = matrix2[i+img_width*(j-1)];
+					int result = matrix2[i+img_width*j];
+					if(j != current_height-1)
+					{
+						int bottom = matrix2[i+img_width*(j+1)];
+						result -= (top+bottom)/2.f;
+						matrix[i+img_width*(current_height/2+j/2)] = result;
+					}
+					else
+					{
+						result -= top;
+						matrix[i+img_width*(current_height/2+j/2)] = result;
+					}
+				}
+			}
+		}
+
+		++level;
+
+		current_width /= 2;
+		current_height /= 2;
+
+		Algo::Surface::Tilings::Square::Grid<PFP2> grid(*generated_map, current_width-1, current_height-1);
+		grid.embedIntoGrid(planeCoordinatesGenerated, img_width-1, img_height-1);
+
+		mh_generated->updateBB(planeCoordinatesGenerated);
+
+		qglviewer::Vec bb_min = mh_generated->getBBmin();
+		qglviewer::Vec bb_max = mh_generated->getBBmax();
+
+		float width_step = (bb_max.x-bb_min.x)/img_width;
+		float height_step = (bb_max.y-bb_min.y)/img_height;
+
+		grid.embedIntoGrid(planeCoordinatesGenerated, img_width-l_p, img_height-l_p);
+
+		PFP2::MATRIX44 transform_matrix;
+		transform_matrix.identity();
+		transform_matrix.setSubVectorV(0, 3, PFP2::VEC4(-(width_step*(l_p-1))/2.f, (height_step*(l_p-1))/2.f, 0., 1.));
+		grid.transform(planeCoordinatesGenerated, transform_matrix);
+
+		std::vector<Dart>& vDarts = grid.getVertexDarts();
+
+		for(int i = 0; i < current_width; ++i)
+		{
+			for(int j = 0; j < current_height; ++j)
+			{
+				//Set plane coordinates in [-1;1]
+				planeCoordinatesGenerated[vDarts[j*current_width+i]][0] /= (img_width-l_p)/2.f;
+				planeCoordinatesGenerated[vDarts[j*current_width+i]][1] /= (img_height-l_p)/2.f;
+
+				imageCoordinatesGenerated[vDarts[i+current_width*j]].setCoordinates(i, j);
+			}
+		}
+
+		mh_generated->notifyAttributeModification(planeCoordinatesGenerated, false);
+		mh_generated->notifyAttributeModification(imageCoordinatesGenerated, false);
+		mh_generated->notifyConnectivityModification(false);
+
+		project2DImageTo3DSpace(mapOrigin, mapGenerated);
+		m_schnapps->getSelectedView()->updateGL();
+	}
+	else
+	{
+		return false;
+	}
+	return true;
 }
 
 #ifndef DEBUG

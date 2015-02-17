@@ -31,6 +31,7 @@ struct MapParameters
 	QHash<QString, Camera*> depthCameraSet;
 	QHash<QString, std::vector<GLfloat>> depthImageSet;
 	QHash<QString, MapHandlerGen*> projectedMapSet;
+	QHash<QString, int> decompositionLevel;
 };
 
 class Surface_DepthMapRendering_Plugin : public PluginInteraction
@@ -50,7 +51,7 @@ private:
 	virtual void disable();
 
 	virtual void draw(View* view) {}
-	virtual void drawMap(View* view, MapHandlerGen* map);
+	virtual void drawMap(View* view, MapHandlerGen* map) {}
 
 	virtual void keyPress(View* view, QKeyEvent* event) {}
 	virtual void keyRelease(View* view, QKeyEvent* event) {}
@@ -66,7 +67,8 @@ private slots:
 	void openDepthMapRenderingDialog();
 	void closeDepthMapRenderingDialog();
 
-	void renderFromDialog();
+	void moveDownFromDialog();
+	void moveUpFromDialog();
 
 	//SCHNApps signals
 	void mapAdded(MapHandlerGen* map);
@@ -84,6 +86,9 @@ public slots: //Python calls
 	void createCameras(const QString& mapName);
 	void render(const QString& mapName, const QString& directory = "/home/blettere/Projets/Models/DepthMaps");
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
+
+	bool moveDownDecomposition(const QString& mapOrigin, const QString& mapGenerated);
+	bool moveUpDecomposition(const QString& mapOrigin, const QString& mapGenerated);
 
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;
