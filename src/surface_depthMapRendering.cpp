@@ -166,7 +166,7 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName)
 		positions.push_back(qglviewer::Vec(-2,0,1));
 		positions.push_back(qglviewer::Vec(-2,0,-1));
 
-		for(int i = 0; i < 1; ++i)
+		for(int i = 0; i < 12; ++i)
 		{
 			QString cameraName(baseName);
 			cameraName.append(QString::number(i));
@@ -229,6 +229,9 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 		Utils::Chrono chrono;
 		chrono.start();
 
+		std::vector<QString> mapNames;
+		mapNames.reserve(mapParam.depthCameraSet.size());
+
 		for(QHash<QString, Camera*>::iterator it = mapParam.depthCameraSet.begin(); it != mapParam.depthCameraSet.end(); ++it)
 		{
 			Camera* camera = it.value();
@@ -237,6 +240,8 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			QString generatedName(mapName);
 			generatedName.append("-");
 			generatedName.append(cameraName);
+
+			mapNames.push_back(generatedName);
 
 			m_schnapps->getSelectedView()->setCurrentCamera(camera);
 
@@ -312,6 +317,8 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 		CGoGNout << "pour " << mapParam.depthCameraSet.size() << " vue(s) différente(s) " << CGoGNflush;
 		CGoGNout << "de taille " << width << "x" << height << CGoGNendl;
 
+		saveAllPointClouds(mapName, mapNames, directory);
+
 		m_schnapps->getSelectedView()->updateGL();
 	}
 }
@@ -352,25 +359,25 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		Camera* camera = mapParam.depthCameraSet[mapGenerated];
 		std::vector<GLfloat> pixels = mapParam.depthImageSet[mapGenerated];
 
-//		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
-//		Dart next;
-//		bool stop = false;
-//		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
-//		{
+		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
+		Dart next;
+		bool stop = false;
+		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
+		{
 
-//			next = trav_face_map.next();
-//			stop = false;
-//			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
-//			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
-//			{
-//				float color = pixels[imageCoordinatesGenerated[dd].getXCoordinate()+m_depthFBO->getWidth()*imageCoordinatesGenerated[dd].getYCoordinate()];
-//				if(fabs(1-color)<FLT_EPSILON)
-//				{
-//					generated_map->deleteFace(d);
-//					stop = true;
-//				}
-//			}
-//		}
+			next = trav_face_map.next();
+			stop = false;
+			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
+			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
+			{
+				float color = pixels[imageCoordinatesGenerated[dd].getXCoordinate()+m_depthFBO->getWidth()*imageCoordinatesGenerated[dd].getYCoordinate()];
+				if(fabs(1-color)<FLT_EPSILON)
+				{
+					generated_map->deleteFace(d);
+					stop = true;
+				}
+			}
+		}
 
 		GLdouble mvp_matrix[16];
 		camera->getModelViewProjectionMatrix(mvp_matrix);
@@ -554,6 +561,83 @@ bool Surface_DepthMapRendering_Plugin::moveDownDecomposition(const QString& mapO
 		return false;
 	}
 	return true;
+}
+
+bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory)
+{
+	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
+	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated );
+
+	if(!directory.isEmpty() && mh_generated)
+	{
+		PFP2::MAP* generated_map = mh_generated->getMap();
+
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
+		if(!position.isValid())
+		{
+			CGoGNerr << "position attribute is not valid" << CGoGNendl;
+			return false;
+		}
+
+		QString filename(directory);
+		filename.append("/");
+		filename.append(mapOrigin);
+		filename.append("/");
+
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename.append(mapGenerated);
+		filename.append(".ply");
+
+		return Algo::Surface::Export::exportPLYVert<PFP2>(*generated_map, position, filename.toStdString().c_str(), false);
+	}
+
+	return false;
+}
+
+bool Surface_DepthMapRendering_Plugin::saveAllPointClouds(const QString& mapOrigin, const std::vector<QString>& mapNames, const QString& directory)
+{
+	if(!mapOrigin.isEmpty() && !mapNames.empty() && !directory.isEmpty())
+	{
+		std::vector<PFP2::MAP*> maps;
+		maps.reserve(mapNames.size());
+		std::vector<VertexAttribute<PFP2::VEC3, PFP2::MAP>> positions;
+		for(int i = 0; i < mapNames.size(); ++i)
+		{
+			MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(m_schnapps->getMap(mapNames[i]));
+			if(mh_map)
+			{
+				PFP2::MAP* map = mh_map->getMap();
+				maps.push_back(map);
+
+				VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_map->getAttribute<PFP2::VEC3, VERTEX>("position");
+				if(!position.isValid())
+				{
+					CGoGNerr << "position attribute is not valid" << CGoGNendl;
+					return false;
+				}
+				positions.push_back(position);
+			}
+			else
+			{
+				return false;
+			}
+		}
+
+		QString filename(directory);
+		filename.append("/");
+		filename.append(mapOrigin);
+		filename.append("/");
+
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename.append(mapOrigin);
+		filename.append("-Merged.ply");
+
+		return Algo::Surface::Export::exportPLYVertMaps<PFP2>(maps, positions, filename.toStdString().c_str(), false);
+	}
+
+	return false;
 }
 
 #ifndef DEBUG

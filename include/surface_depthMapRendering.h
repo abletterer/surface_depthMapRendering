@@ -12,6 +12,8 @@
 
 #include "Algo/Tiling/Surface/square.h"
 
+#include "Algo/Export/export.h"
+
 #include "imageCoordinates.h"
 
 namespace CGoGN
@@ -84,11 +86,15 @@ public slots: //Python calls
 	void changePositionVBO(const QString& view, const QString& map, const QString& vbo);
 
 	void createCameras(const QString& mapName);
-	void render(const QString& mapName, const QString& directory = "/home/blettere/Projets/Models/DepthMaps");
+	void render(const QString& mapName, const QString& directory = "/home/blettere/Projets/Models/DepthMaps/");
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
 
 	bool moveDownDecomposition(const QString& mapOrigin, const QString& mapGenerated);
 	bool moveUpDecomposition(const QString& mapOrigin, const QString& mapGenerated);
+
+	bool savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Models/PointClouds/");
+
+	bool saveAllPointClouds(const QString& mapOrigin, const std::vector<QString>& mapNames, const QString& directory = "/home/blettere/Projets/Models/PointClouds/");
 
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;
