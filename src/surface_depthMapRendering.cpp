@@ -166,24 +166,22 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName)
 		positions.push_back(qglviewer::Vec(-2,0,1));
 		positions.push_back(qglviewer::Vec(-2,0,-1));
 
+		qglviewer::Vec bb_min = mh_map->getBBmin();
+		qglviewer::Vec bb_max = mh_map->getBBmax();
+
+		qglviewer::Vec center = (bb_min+bb_max)/2.f;
+
 		for(int i = 0; i < 12; ++i)
 		{
 			QString cameraName(baseName);
 			cameraName.append(QString::number(i));
 			Camera* camera = m_schnapps->addCamera(cameraName);
 
-			qglviewer::Vec bb_min = mh_map->getBBmin();
-			qglviewer::Vec bb_max = mh_map->getBBmax();
-
-			qglviewer::Vec center = (bb_min+bb_max)/2.f;
-
 			qglviewer::Vec camera_position(camera->position());
 
 			float radius = qAbs(camera_position.z - center.z);
+			++radius;	//To avoid problems when camera is placed at the center of the scene
 
-//			camera_position.x = center.x + radius*std::cos(M_PI/(number/2.)*i);
-//			camera_position.y = center.y;
-//			camera_position.z = center.z + radius*std::sin(M_PI/(number/2.)*i);
 			camera_position.x = center.x + radius*positions[i].x;
 			camera_position.y = center.y + radius*positions[i].y;
 			camera_position.z = center.z + radius*positions[i].z;
