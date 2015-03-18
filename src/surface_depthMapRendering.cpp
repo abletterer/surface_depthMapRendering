@@ -244,7 +244,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			m_schnapps->getSelectedView()->setCurrentCamera(camera);
 
 			m_depthFBO->bind();
-			glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To get a clean texture (black background)
+			glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
 			mh_map->draw(m_shader, CGoGN::Algo::Render::GL2::TRIANGLES);	//Render the map into the FrameBufferObject
 
 			glBindTexture(GL_TEXTURE_2D, *m_depthFBO->getDepthTexId());
