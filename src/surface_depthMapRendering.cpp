@@ -194,15 +194,14 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName)
 			camera->showEntireScene();
 
 			QString generatedName(mapName);
-			generatedName.append("-");
-			generatedName.append(cameraName);
+			generatedName += "-" + cameraName;
 
 			mapParam.depthCameraSet[generatedName] = camera;
 		}
 	}
 }
 
-void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QString& directory)
+void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QString& directory, bool saveData)
 {
 	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
 	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
@@ -224,6 +223,12 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 		std::vector<GLfloat> pixels;
 		pixels.resize(width*height);
 
+		std::vector<GLuint> depthValues;
+		if(saveData)
+		{
+			depthValues.resize(width*height);
+		}
+
 		Utils::Chrono chrono;
 		chrono.start();
 
@@ -236,8 +241,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			QString cameraName(camera->getName());
 
 			QString generatedName(mapName);
-			generatedName.append("-");
-			generatedName.append(cameraName);
+			generatedName += "-" + cameraName;
 
 			mapNames.push_back(generatedName);
 
@@ -251,28 +255,13 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 			//Read pixels of the generated texture and store them in an array
 			glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
+			if(saveData)
+			{
+				glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, depthValues.data());
+			}
 			m_depthFBO->unbind();
 
 			m_schnapps->getSelectedView()->setCurrentCamera("camera_0");
-
-//				QImage image(width ,height, QImage::Format_RGB32);
-
-//				QString filename(directory);
-//				filename.append("/");
-//				filename.append(mapName);
-//				filename.append("/");
-
-//				mkdir(filename.toStdString().c_str(), 0777);
-
-//				filename.append(mapName);
-//				filename.append("-");
-//				filename.append(cameraName);
-//				filename.append(".png");
-
-//				if(!image.save(filename))
-//				{
-//					CGoGNerr << "Image '" << filename.toStdString() << "' has not been saved" << CGoGNendl;
-//				}
 
 			MapHandlerGen* mhg_generated = m_schnapps->addMap(generatedName, 2);
 			mapParam.projectedMapSet[generatedName] = mhg_generated;
@@ -305,6 +294,42 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 			mapParam.depthImageSet[generatedName] = pixels;
 
+			if(saveData)
+			{
+				QString filename(directory);
+				filename += "/" + mapName + "/";
+				mkdir(filename.toStdString().c_str(), 0777);
+
+				filename += "DepthMaps/";
+				mkdir(filename.toStdString().c_str(), 0777);
+
+				filename += QString::number(width) + "x" + QString::number(height) + "/";
+				mkdir(filename.toStdString().c_str(), 0777);
+
+				filename += generatedName + ".dat";
+
+				std::ofstream out;
+				out.open(filename.toStdString(), std::ios::out);
+
+				if(out.good())
+				{
+					for(int j = height-1; j >= 0; --j)
+					{
+						for(int i = 0; i < width; ++i)
+						{
+							out << depthValues[i+width*j] << " " << std::flush;
+						}
+						out << std::endl;
+					}
+
+					out.close();
+				}
+				else
+				{
+					CGoGNerr << "Unable to open file" << CGoGNendl;
+				}
+			}
+
 			mh_generated->notifyConnectivityModification(false);
 			mh_generated->notifyAttributeModification(planeCoordinatesGenerated, false);
 			mh_generated->notifyAttributeModification(imageCoordinatesGenerated, false);
@@ -313,9 +338,10 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 		CGoGNout << "Temps d'échantillonnage : " << chrono.elapsed() << " ms " << CGoGNflush;
 		CGoGNout << "pour " << mapParam.depthCameraSet.size() << " vue(s) différente(s) " << CGoGNflush;
-		CGoGNout << "de taille " << width << "x" << height << CGoGNendl;
+		CGoGNout << "de taille " << width << "x" << height << CGoGNflush;
+		CGoGNout << " sur un objet composé de " << mh_map->getMap()->getNbCells(VERTEX) << " point(s)" << CGoGNendl;
 
-		saveAllPointClouds(mapName, mapNames, directory);
+		saveMergedPointCloud(mapName, mapNames, directory);
 
 		m_schnapps->getSelectedView()->updateGL();
 	}
@@ -578,14 +604,16 @@ bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin, 
 		}
 
 		QString filename(directory);
-		filename.append("/");
-		filename.append(mapOrigin);
-		filename.append("/");
-
+		filename += "/" + mapOrigin + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
-		filename.append(mapGenerated);
-		filename.append(".ply");
+		filename += "PointClouds/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += QString::number(m_depthFBO->getWidth()) + "x" + QString::number(m_depthFBO->getHeight()) + "/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += mapGenerated + ".ply";
 
 		return Algo::Surface::Export::exportPLYVert<PFP2>(*generated_map, position, filename.toStdString().c_str(), false);
 	}
@@ -593,7 +621,7 @@ bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin, 
 	return false;
 }
 
-bool Surface_DepthMapRendering_Plugin::saveAllPointClouds(const QString& mapOrigin, const std::vector<QString>& mapNames, const QString& directory)
+bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOrigin, const std::vector<QString>& mapNames, const QString& directory)
 {
 	if(!mapOrigin.isEmpty() && !mapNames.empty() && !directory.isEmpty())
 	{
@@ -623,14 +651,16 @@ bool Surface_DepthMapRendering_Plugin::saveAllPointClouds(const QString& mapOrig
 		}
 
 		QString filename(directory);
-		filename.append("/");
-		filename.append(mapOrigin);
-		filename.append("/");
-
+		filename += "/" + mapOrigin + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
-		filename.append(mapOrigin);
-		filename.append("-Merged.ply");
+		filename += "PointClouds/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += QString::number(m_depthFBO->getWidth()) + "x" + QString::number(m_depthFBO->getHeight()) + "/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += mapOrigin + "-Merged.ply";
 
 		return Algo::Surface::Export::exportPLYVertMaps<PFP2>(maps, positions, filename.toStdString().c_str(), false);
 	}
