@@ -201,7 +201,7 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName)
 	}
 }
 
-void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QString& directory, bool saveData)
+void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QString& directory)
 {
 	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
 	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
@@ -222,12 +222,6 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 		std::vector<GLfloat> pixels;
 		pixels.resize(width*height);
-
-		std::vector<GLuint> depthValues;
-		if(saveData)
-		{
-			depthValues.resize(width*height);
-		}
 
 		Utils::Chrono chrono;
 		chrono.start();
@@ -255,10 +249,6 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 			//Read pixels of the generated texture and store them in an array
 			glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
-			if(saveData)
-			{
-				glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, depthValues.data());
-			}
 			m_depthFBO->unbind();
 
 			m_schnapps->getSelectedView()->setCurrentCamera("camera_0");
@@ -293,42 +283,6 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			}
 
 			mapParam.depthImageSet[generatedName] = pixels;
-
-			if(saveData)
-			{
-				QString filename(directory);
-				filename += "/" + mapName + "/";
-				mkdir(filename.toStdString().c_str(), 0777);
-
-				filename += "DepthMaps/";
-				mkdir(filename.toStdString().c_str(), 0777);
-
-				filename += QString::number(width) + "x" + QString::number(height) + "/";
-				mkdir(filename.toStdString().c_str(), 0777);
-
-				filename += generatedName + ".dat";
-
-				std::ofstream out;
-				out.open(filename.toStdString(), std::ios::out);
-
-				if(out.good())
-				{
-					for(int j = height-1; j >= 0; --j)
-					{
-						for(int i = 0; i < width; ++i)
-						{
-							out << depthValues[i+width*j] << " " << std::flush;
-						}
-						out << std::endl;
-					}
-
-					out.close();
-				}
-				else
-				{
-					CGoGNerr << "Unable to open file" << CGoGNendl;
-				}
-			}
 
 			mh_generated->notifyConnectivityModification(false);
 			mh_generated->notifyAttributeModification(planeCoordinatesGenerated, false);
@@ -616,6 +570,57 @@ bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin, 
 		filename += mapGenerated + ".ply";
 
 		return Algo::Surface::Export::exportPLYVert<PFP2>(*generated_map, position, filename.toStdString().c_str(), false);
+	}
+
+	return false;
+}
+
+bool Surface_DepthMapRendering_Plugin::saveDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory)
+{
+	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
+	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
+
+	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
+	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
+
+	if(!directory.isEmpty() && mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
+	{
+		MapParameters& mapParams = m_mapParameterSet[mh_origin];
+
+		QString filename(directory);
+		filename += "/" + mapOrigin + "/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += "DepthMaps/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += QString::number(m_depthFBO->getWidth()) + "x" + QString::number(m_depthFBO->getHeight()) + "/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += mapGenerated + ".dat";
+
+		std::ofstream out;
+		out.open(filename.toStdString(), std::ios::out);
+		if(!out.good())
+		{
+			CGoGNerr << "Unable to open file" << CGoGNendl;
+			return false;
+		}
+
+		std::vector<GLfloat> depthMap = mapParams.depthImageSet[mapGenerated];
+
+		for(int j = m_depthFBO->getHeight()-1; j >= 0; --j)
+		{
+			for(int i = 0; i < m_depthFBO->getWidth(); ++i)
+			{
+				out << depthMap[i+m_depthFBO->getWidth()*j] << " " << std::flush;
+			}
+			out << std::endl;
+		}
+
+		out.close();
+
+		return true;
 	}
 
 	return false;

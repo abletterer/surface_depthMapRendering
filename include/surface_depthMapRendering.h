@@ -88,13 +88,14 @@ public slots: //Python calls
 	void changePositionVBO(const QString& view, const QString& map, const QString& vbo);
 
 	void createCameras(const QString& mapName);
-	void render(const QString& mapName, const QString& directory = "/home/blettere/Projets/Results/", bool saveData = false);
+	void render(const QString& mapName, const QString& directory = "/home/blettere/Projets/Results/");
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
 
 	bool moveDownDecomposition(const QString& mapOrigin, const QString& mapGenerated);
 	bool moveUpDecomposition(const QString& mapOrigin, const QString& mapGenerated);
 
 	bool savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
+	bool saveDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
 
 	bool saveMergedPointCloud(const QString& mapOrigin, const std::vector<QString>& mapNames, const QString& directory = "/home/blettere/Projets/Results/");
 
