@@ -611,7 +611,7 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 
 	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
 	{
-		CGoGNout << "Calcul des valeurs de confiance " << mapGenerated.toStdString() << " .." << CGoGNflush;
+		CGoGNout << "Calcul des valeurs de confiance de visibilité " << mapGenerated.toStdString() << " .." << CGoGNflush;
 		Utils::Chrono chrono;
 		chrono.start();
 
