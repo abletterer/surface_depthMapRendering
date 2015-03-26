@@ -14,7 +14,7 @@
 #include "Algo/Tiling/Surface/square.h"
 
 #include "Algo/Export/export.h"
-
+#include "Eigen/Eigen"
 
 #include <fstream>
 
@@ -33,7 +33,7 @@ struct MapParameters
 	Utils::VBO* positionVBO;
 
 	QHash<QString, Camera*> depthCameraSet;
-	QHash<QString, std::vector<GLfloat>> depthImageSet;
+	QHash<QString, Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> > depthImageSet;
 	QHash<QString, MapHandlerGen*> projectedMapSet;
 	QHash<QString, int> decompositionLevel;
 };
@@ -98,6 +98,9 @@ public slots: //Python calls
 	bool saveDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
 
 	bool saveMergedPointCloud(const QString& mapOrigin, const std::vector<QString>& mapNames, const QString& directory = "/home/blettere/Projets/Results/");
+
+//	void applyFilter(const QString& mapOrigin, const QString& mapGenerated, std::vector<int>& f, int size_x, int size_y);
+	void normalEstimation(const QString& mapOrigin, const QString& mapGenerated);
 
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;
