@@ -340,25 +340,25 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		Camera* camera = mapParams.depthCameraSet[mapGenerated];
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels = mapParams.depthImageSet[mapGenerated];
 
-//		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
-//		Dart next;
-//		bool stop = false;
-//		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
-//		{
-//			next = trav_face_map.next();
-//			stop = false;
-//			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
-//			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
-//			{
-//				float color = pixels(imageCoordinatesGenerated[dd].getXCoordinate(),imageCoordinatesGenerated[dd].getYCoordinate());
-//				if(fabs(1-color)<FLT_EPSILON)
-//				{
-//					//Le point fait partie du fond de l'image
-//					generated_map->deleteFace(d);
-//					stop = true;
-//				}
-//			}
-//		}
+		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
+		Dart next;
+		bool stop = false;
+		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
+		{
+			next = trav_face_map.next();
+			stop = false;
+			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
+			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
+			{
+				float color = pixels(imageCoordinatesGenerated[dd].getXCoordinate(),imageCoordinatesGenerated[dd].getYCoordinate());
+				if(fabs(1-color)<FLT_EPSILON)
+				{
+					//Le point fait partie du fond de l'image
+					generated_map->deleteFace(d);
+					stop = true;
+				}
+			}
+		}
 
 		generated_map->updateQuickTraversal<PFP2::MAP, VERTEX>();
 
@@ -586,8 +586,8 @@ void Surface_DepthMapRendering_Plugin::normalEstimation(const QString& mapOrigin
 
 		for(int i = 0; i < pos_matrix.rows()-1; ++i)
 		{
-			Eigen::Vector3f u = pos_matrix.row(i+height)-pos_matrix.row(i);
-			Eigen::Vector3f v = pos_matrix.row(i+1)-pos_matrix.row(i);
+			Eigen::Vector3f u = pos_matrix.row(i+height)-pos_matrix.row(i);	//(x+1;y)-(x;y)
+			Eigen::Vector3f v = pos_matrix.row(i+1)-pos_matrix.row(i);	//(x;y+1)-(x;y)
 			normal_matrix.row(i) = (u.cross(v)).normalized();
 		}
 
