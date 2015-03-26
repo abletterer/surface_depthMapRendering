@@ -201,7 +201,7 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName)
 	}
 }
 
-void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QString& directory)
+void Surface_DepthMapRendering_Plugin::render(const QString& mapName, bool saveData, const QString& directory)
 {
 	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
 	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
@@ -298,7 +298,10 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 		CGoGNout << "de taille " << width << "x" << height << CGoGNflush;
 		CGoGNout << " sur un objet composé de " << mh_map->getMap()->getNbCells(VERTEX) << " point(s)" << CGoGNendl;
 
-		saveMergedPointCloud(mapName, mapNames, directory);
+		if(saveData)
+		{
+			saveMergedPointCloud(mapName, mapNames, directory);
+		}
 
 		m_schnapps->getSelectedView()->updateGL();
 	}
@@ -562,8 +565,6 @@ void Surface_DepthMapRendering_Plugin::normalEstimation(const QString& mapOrigin
 		Utils::Chrono chrono;
 		chrono.start();
 
-		MapParameters& mapParams = m_mapParameterSet[mh_origin];
-
 		PFP2::MAP* generated_map = mh_generated->getMap();
 
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
@@ -571,24 +572,21 @@ void Surface_DepthMapRendering_Plugin::normalEstimation(const QString& mapOrigin
 
 		int width = m_depthFBO->getWidth(), height = m_depthFBO->getHeight();
 
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, 3> pos_matrix;
-		pos_matrix.setZero(width*height, 3);
-
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, 3> normal_matrix;
-		normal_matrix.setZero(width*height, 3);
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, 3> matrix;
+		matrix.setZero(width*height, 3);
 
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
-			pos_matrix.row(imageCoordinates[d].getXCoordinate()*height+imageCoordinates[d].getYCoordinate())
+			matrix.row(imageCoordinates[d].getXCoordinate()*height+imageCoordinates[d].getYCoordinate())
 					= Eigen::Vector3f(position[d][0], position[d][1], position[d][2]);
 		}
 
-		for(int i = 0; i < pos_matrix.rows()-1; ++i)
+		for(int i = 0; i < matrix.rows()-1; ++i)
 		{
-			Eigen::Vector3f u = pos_matrix.row(i+height)-pos_matrix.row(i);	//(x+1;y)-(x;y)
-			Eigen::Vector3f v = pos_matrix.row(i+1)-pos_matrix.row(i);	//(x;y+1)-(x;y)
-			normal_matrix.row(i) = (u.cross(v)).normalized();
+			Eigen::Vector3f u = matrix.row(i+height)-matrix.row(i);	//(x+1;y)-(x;y)
+			Eigen::Vector3f v = matrix.row(i+1)-matrix.row(i);	//(x;y+1)-(x;y)
+			matrix.row(i) = (u.cross(v)).normalized();
 		}
 
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("normal");
@@ -596,7 +594,47 @@ void Surface_DepthMapRendering_Plugin::normalEstimation(const QString& mapOrigin
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
 			int pos_in_mat = imageCoordinates[d].getXCoordinate()*height+imageCoordinates[d].getYCoordinate();
-			normal[d] = PFP2::VEC3(normal_matrix(pos_in_mat, 0), normal_matrix(pos_in_mat, 1), normal_matrix(pos_in_mat, 2));
+			normal[d] = PFP2::VEC3(matrix(pos_in_mat, 0), matrix(pos_in_mat, 1), matrix(pos_in_mat, 2));
+		}
+
+		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
+	}
+}
+
+void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated)
+{
+	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
+	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
+
+	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
+	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
+
+	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
+	{
+		CGoGNout << "Calcul des valeurs de confiance " << mapGenerated.toStdString() << " .." << CGoGNflush;
+		Utils::Chrono chrono;
+		chrono.start();
+
+		PFP2::MAP* generated_map = mh_generated->getMap();
+
+		MapParameters& mapParams = m_mapParameterSet[mh_origin];
+		Camera* camera = mapParams.depthCameraSet[mapGenerated];
+
+		PFP2::VEC3 position_camera(camera->position().x, camera->position().y, camera->position().z);
+
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("normal");
+		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->addAttribute<float, VERTEX>("VisibilityConfidence");
+
+		int width = m_depthFBO->getWidth(), height = m_depthFBO->getHeight();
+
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, 3> matrix;
+		matrix.setZero(width*height, 3);
+
+		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
+		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
+		{
+			visibilityConfidence[d] = (position[d]-position_camera)*(normal[d]);
 		}
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;

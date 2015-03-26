@@ -88,7 +88,7 @@ public slots: //Python calls
 	void changePositionVBO(const QString& view, const QString& map, const QString& vbo);
 
 	void createCameras(const QString& mapName);
-	void render(const QString& mapName, const QString& directory = "/home/blettere/Projets/Results/");
+	void render(const QString& mapName, bool saveData = false, const QString& directory = "/home/blettere/Projets/Results/");
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
 
 	bool moveDownDecomposition(const QString& mapOrigin, const QString& mapGenerated);
@@ -101,6 +101,7 @@ public slots: //Python calls
 
 //	void applyFilter(const QString& mapOrigin, const QString& mapGenerated, std::vector<int>& f, int size_x, int size_y);
 	void normalEstimation(const QString& mapOrigin, const QString& mapGenerated);
+	void confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated);
 
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;
