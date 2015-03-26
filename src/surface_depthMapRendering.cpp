@@ -137,7 +137,7 @@ void Surface_DepthMapRendering_Plugin::changePositionVBO(const QString& view, co
 	}
 }
 
-void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName)
+void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int nbMax)
 {
 	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
 	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
@@ -171,7 +171,7 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName)
 
 		qglviewer::Vec center = (bb_min+bb_max)/2.f;
 
-		for(int i = 0; i < 12; ++i)
+		for(int i = 0; i < nbMax; ++i)
 		{
 			QString cameraName(baseName);
 			cameraName.append(QString::number(i));
@@ -634,7 +634,11 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
-			visibilityConfidence[d] = (position[d]-position_camera)*(normal[d]);
+			visibilityConfidence[d] = (position_camera-position[d])*(normal[d]);
+			if(visibilityConfidence[d] != visibilityConfidence[d])
+			{	//visibilityConfidence[d]==NaN
+				visibilityConfidence[d] = 0.f;
+			}
 		}
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
