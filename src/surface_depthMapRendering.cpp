@@ -611,7 +611,7 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 
 	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
 	{
-		CGoGNout << "Calcul des valeurs de confiance de visibilité " << mapGenerated.toStdString() << " .." << CGoGNflush;
+		CGoGNout << "Calcul des valeurs de confiance de visibilité de la carte " << mapGenerated.toStdString() << " .." << CGoGNflush;
 		Utils::Chrono chrono;
 		chrono.start();
 
@@ -638,6 +638,57 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 			if(visibilityConfidence[d] != visibilityConfidence[d])
 			{	//visibilityConfidence[d]==NaN
 				visibilityConfidence[d] = 0.f;
+			}
+		}
+
+		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
+	}
+}
+
+void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated)
+{
+
+	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
+	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
+
+	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
+	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
+
+	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
+	{
+		CGoGNout << "Appariement des points de la carte " << mapGenerated.toStdString() << " .." << CGoGNflush;
+		Utils::Chrono chrono;
+		chrono.start();
+
+		MapParameters& mapParams = m_mapParameterSet[mh_origin];
+		Camera* camera = mapParams.depthCameraSet[mapGenerated];
+
+		int width = m_depthFBO->getWidth(), height = m_depthFBO->getHeight();
+
+		std::vector<GLfloat> pixels;
+		pixels.resize(width*height);
+
+		m_shader->setAttributePosition(mhg_generated->getVBO("position"));
+
+		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
+		{
+			if(it.key().compare(camera->getName()) != 0)
+			{
+				Camera* current = it.value();
+
+				m_schnapps->getSelectedView()->setCurrentCamera(current, false);
+
+				m_depthFBO->bind();
+				glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
+				glBindTexture(GL_TEXTURE_2D, *m_depthFBO->getDepthTexId());
+
+				mh_generated->draw(m_shader, CGoGN::Algo::Render::GL2::TRIANGLES);	//Render the map into the FrameBufferObject
+
+				//Read pixels of the generated texture and store them in an array
+				glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
+				m_depthFBO->unbind();
+
+				m_schnapps->getSelectedView()->setCurrentCamera("camera_0", false);
 			}
 		}
 

@@ -103,6 +103,8 @@ public slots: //Python calls
 	void normalEstimation(const QString& mapOrigin, const QString& mapGenerated);
 	void confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated);
 
+	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated);
+
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;
 	QAction* m_depthMapRenderingAction;
