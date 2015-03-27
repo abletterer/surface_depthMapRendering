@@ -8,6 +8,7 @@
 
 #include "dialog_surface_depthMapRendering.h"
 #include "Utils/Shaders/shaderSimpleColor.h"
+#include "Utils/Shaders/shaderScalarFieldReal.h"
 #include "Utils/fbo.h"
 #include "Utils/chrono.h"
 
@@ -112,7 +113,8 @@ private:
 	QHash<MapHandlerGen*, MapParameters> m_mapParameterSet;
 
 	CGoGN::Utils::FBO* m_depthFBO;
-	CGoGN::Utils::ShaderSimpleColor* m_shader;
+	CGoGN::Utils::ShaderSimpleColor* m_shaderSimpleColor;
+	CGoGN::Utils::ShaderScalarFieldReal* m_shaderScalarFieldReal;
 
 	bool m_draw;
 };
