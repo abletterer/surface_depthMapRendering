@@ -36,7 +36,6 @@ struct MapParameters
 	QHash<QString, Camera*> depthCameraSet;
 	QHash<QString, Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> > depthImageSet;
 	QHash<QString, MapHandlerGen*> projectedMapSet;
-	QHash<QString, int> decompositionLevel;
 };
 
 class Surface_DepthMapRendering_Plugin : public PluginInteraction

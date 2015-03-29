@@ -238,6 +238,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, bool saveD
 		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
 		{
 			Camera* camera = it.value();
+
 			QString cameraName(camera->getName());
 
 			QString generatedName(mapName);
@@ -247,14 +248,17 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, bool saveD
 
 			m_schnapps->getSelectedView()->setCurrentCamera(camera, false);
 
+			camera->setZNear(camera->zNear());
+			camera->setZFar(camera->zFar());
+			camera->setStandard(false);
+
 			m_depthFBO->bind();
 			glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
-			glBindTexture(GL_TEXTURE_2D, *m_depthFBO->getDepthTexId());
 
 			mh_map->draw(m_shaderSimpleColor, CGoGN::Algo::Render::GL2::TRIANGLES);	//Render the map into the FrameBufferObject
 
-			//Read pixels of the generated texture and store them in an array
-			glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
+			//Read pixels and store them in an array
+			glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
 			glBindTexture(GL_TEXTURE_2D, 0);
 			m_depthFBO->unbind();
 
@@ -262,8 +266,6 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, bool saveD
 
 			MapHandlerGen* mhg_generated = m_schnapps->addMap(generatedName, 2);
 			mapParams.projectedMapSet[generatedName] = mhg_generated;
-
-			mapParams.decompositionLevel[generatedName] = 0;
 
 			MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
 			PFP2::MAP* generated_map = mh_generated->getMap();
@@ -288,11 +290,9 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, bool saveD
 				}
 			}
 
-			pixels = pixels.array()*2-1;	//Put depth values in the range [-1;1]
+			pixels.array() = pixels.array()*2-1;	//Put depth values in the range [-1;1]
 
 			mapParams.depthImageSet[generatedName] = pixels;
-
-			generated_map->enableQuickTraversal<PFP2::MAP, VERTEX>();
 
 			mh_generated->notifyConnectivityModification(false);
 			mh_generated->notifyAttributeModification(planeCoordinatesGenerated, false);
@@ -348,6 +348,7 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		}
 
 		Camera* camera = mapParams.depthCameraSet[mapGenerated];
+
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels = mapParams.depthImageSet[mapGenerated];
 
 		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
@@ -368,7 +369,6 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 				}
 			}
 		}
-		generated_map->updateQuickTraversal<PFP2::MAP, VERTEX>();
 
 		GLdouble mvp_matrix[16];
 		camera->getModelViewProjectionMatrix(mvp_matrix);
@@ -602,6 +602,8 @@ void Surface_DepthMapRendering_Plugin::normalEstimation(const QString& mapOrigin
 			normal[d] = PFP2::VEC3(matrix(pos_in_mat, 0), matrix(pos_in_mat, 1), matrix(pos_in_mat, 2));
 		}
 
+		mh_generated->notifyAttributeModification(normal);
+
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
 	}
 }
@@ -633,18 +635,17 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 
 		int width = m_depthFBO->getWidth(), height = m_depthFBO->getHeight();
 
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, 3> matrix;
-		matrix.setZero(width*height, 3);
-
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
-			visibilityConfidence[d] = (position_camera-position[d])*(normal[d]);
+			visibilityConfidence[d] = std::abs((position[d]-position_camera)*(normal[d]));
 			if(visibilityConfidence[d] != visibilityConfidence[d])
 			{	//visibilityConfidence[d]==NaN
 				visibilityConfidence[d] = 0.f;
 			}
 		}
+
+		mh_generated->notifyAttributeModification(visibilityConfidence, false);
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
 	}
@@ -652,7 +653,6 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 
 void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated)
 {
-
 	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
 	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
 
@@ -661,109 +661,95 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
 	{
-		CGoGNout << "Appariement des points de la carte " << mapGenerated.toStdString() << " :" << CGoGNendl;
+		CGoGNout << "Visibilité des points de la carte " << mapGenerated.toStdString() << " .." << CGoGNflush;
+		Utils::Chrono chrono;
+		chrono.start();
 
 		MapParameters& mapParams = m_mapParameterSet[mh_origin];
+
+		Camera* camera = mapParams.depthCameraSet[mapGenerated];
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& existing_depthImage = mapParams.depthImageSet[mapGenerated];
+
+		PFP2::MAP* generated_map = mh_generated->getMap();
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("normal");
+		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
+		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->getAttribute<float, VERTEX>("VisibilityConfidence");
 
 		int width = m_depthFBO->getWidth(), height = m_depthFBO->getHeight();
 
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> depthImage;
 		depthImage.setZero(width, height);
 
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> maxConfidenceValues;
+		maxConfidenceValues.setZero(width, height);
+
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> confidenceValues;
 		confidenceValues.setZero(width, height);
 
-		m_shaderScalarFieldReal->setAttributePosition(mhg_generated->getVBO("position"));
-		m_shaderScalarFieldReal->setAttributeScalar(mhg_generated->getVBO("VisibilityConfidence"));
+		qglviewer::Vec camera_position = camera->position();
+
+		m_schnapps->getSelectedView()->setCurrentCamera(camera, false);
+
+		camera->setPosition(camera_position);
 
 		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
 		{
 			if(it.key().compare(mh_generated->getName()) != 0)
 			{
-				Camera* current_camera = it.value();
-				CGoGNout << "\t Par rapport à la caméra " << current_camera->getName().toStdString() << " .." << CGoGNflush;
-				Utils::Chrono chrono;
-				chrono.start();
-
 				MapHandler<PFP2>* mh_current = static_cast<MapHandler<PFP2>*>(mapParams.projectedMapSet[it.key()]);
 
-				m_schnapps->getSelectedView()->setCurrentCamera(current_camera, false);
+				m_shaderScalarFieldReal->setAttributePosition(mh_current->getVBO("position"));
+				m_shaderScalarFieldReal->setAttributeScalar(mh_current->getVBO("VisibilityConfidence"));
 
 				m_depthFBO->bind();
 				glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
 
-				mh_generated->draw(m_shaderScalarFieldReal, CGoGN::Algo::Render::GL2::POINTS);	//Render the map into the FrameBufferObject
+				mh_current->draw(m_shaderScalarFieldReal, CGoGN::Algo::Render::GL2::POINTS);	//Render the map into the FrameBufferObject
 
 				//Read pixels and store them in an array
 				glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depthImage.data());
 				glReadPixels(0, 0, width, height, GL_RED, GL_FLOAT, confidenceValues.data());
 				m_depthFBO->unbind();
 
-				m_schnapps->getSelectedView()->setCurrentCamera("camera_0", false);
+				depthImage = depthImage.array()*2-1;    //Set range to [-1;1]
 
-				depthImage = depthImage.array()*2-1;
+				depthImage = (depthImage.array()-existing_depthImage.array()).abs();
 
-				Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> current_depthImage = mapParams.depthImageSet[mh_current->getName()];
-
-				for(int i = 0; i < confidenceValues.rows(); ++i)
+				for(int i = 0; i < depthImage.rows(); ++i)
 				{
-					for(int j = 0; j < confidenceValues.cols(); ++j)
+					for(int j = 0; j < depthImage.cols(); ++j)
 					{
-						float value = fabs(depthImage(i,j)-current_depthImage(i,j));
+						if(depthImage(i,j) < 0.05f)
+						{
+							maxConfidenceValues(i,j) = std::max(maxConfidenceValues(i, j), confidenceValues(i, j));
+						}
 					}
 				}
-
-				CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
 			}
 		}
+
+		m_schnapps->getSelectedView()->setCurrentCamera("camera_0", false);
+
+		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
+		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
+		{
+			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
+			if(visibilityConfidence[d] < maxConfidenceValues(x, y)+0.01f)
+			{
+				position[d] = PFP2::VEC3(0.f, 0.f, 0.f);
+				normal[d] = PFP2::VEC3(0.f, 0.f, 0.f);
+				visibilityConfidence[d] = 0.f;
+			}
+		}
+
+		mh_generated->notifyAttributeModification(position, false);
+		mh_generated->notifyAttributeModification(normal, false);
+		mh_generated->notifyAttributeModification(visibilityConfidence, false);
+
+		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
 	}
 }
-
-//void Surface_DepthMapRendering_Plugin::applyFilter(const QString& mapOrigin, const QString& mapGenerated, std::vector<int>& f, int size_x, int size_y)
-//{
-//	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
-//	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
-
-//	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
-//	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
-
-//	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin) && !f.empty())
-//	{
-//		MapParameters& mapParams = m_mapParameterSet[mh_origin];
-
-//		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& pixels = mapParams.depthImageSet[mapGenerated];
-//		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> res(pixels);
-
-//		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> filter;
-//		filter.setZero(size_x, size_y);
-
-//		for(int i = 0; i < filter.rows(); ++i)
-//		{
-//			for(int j = 0; j < filter.cols(); ++j)
-//			{
-//				filter(i, j) = f[j+size_x*i];
-//			}
-//		}
-
-//		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> tmp;
-//		tmp.setZero(size_x, size_y);
-
-
-//		for(int i = 1; i < pixels.rows()-1; ++i)
-//		{
-//			for(int j = 1; j < pixels.cols()-1; ++j)
-//			{
-//				tmp <<	pixels(i-1, j-1), pixels(i-1, j), pixels(i-1, j+1),
-//						pixels(i, j-1), pixels(i, j), pixels(i, j+1),
-//						pixels(i+1, j-1), pixels(i+1, j), pixels(i+1, j+1);
-
-//				tmp.array() *= filter.array();
-
-//				res(i, j) = tmp.sum();
-//			}
-//		}
-//	}
-//}
 
 #ifndef DEBUG
 Q_EXPORT_PLUGIN2(Surface_DepthMapRendering_Plugin, Surface_DepthMapRendering_Plugin)
