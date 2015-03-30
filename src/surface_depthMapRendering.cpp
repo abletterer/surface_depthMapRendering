@@ -348,8 +348,8 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
 			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
 			{
-				float color = pixels(imageCoordinatesGenerated[dd].getXCoordinate(),imageCoordinatesGenerated[dd].getYCoordinate());
-				if(fabs(1-color)<FLT_EPSILON)
+				GLfloat color = pixels(imageCoordinatesGenerated[dd].getXCoordinate(),imageCoordinatesGenerated[dd].getYCoordinate());
+				if(fabs(1 - color) < FLT_EPSILON)
 				{
 					//Le point fait partie du fond de l'image
 					generated_map->deleteFace(d);
@@ -631,9 +631,16 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 //		{
 //			for(int j = 1; j < depthImage.cols()-1; ++j)
 //			{
-//				float grad_x = depthImage(i+1,j)-depthImage(i-1,j);
-//				float grad_y = depthImage(i,j+1)-depthImage(i,j-1);
-//				gradientMagnitude(i, j) = sqrt(grad_x*grad_x+grad_y*grad_y);
+////				float grad_x = depthImage(i+1,j)-depthImage(i-1,j);
+////				float grad_y = depthImage(i,j+1)-depthImage(i,j-1);
+//				float grad_x = -1*depthImage(i-1,j-1) + 0*depthImage(i-1,j) + 1*depthImage(i-1,j+1)
+//							   + -2*depthImage(i,j-1) + 0*depthImage(i,j) + 2*depthImage(i,j+1)
+//							   + -1*depthImage(i+1,j-1) + 0*depthImage(i+1,j) + 1*depthImage(i+1,j+1);
+//				float grad_y = -1*depthImage(i-1,j-1) + -2*depthImage(i-1,j) + -1*depthImage(i-1,j+1)
+//							   + 0*depthImage(i,j-1) + 0*depthImage(i,j) + 0*depthImage(i,j+1)
+//							   + 1*depthImage(i+1,j-1) + 2*depthImage(i+1,j) + 1*depthImage(i+1,j+1);
+////				gradientMagnitude(i, j) = sqrt(grad_x*grad_x+grad_y*grad_y);
+//				gradientMagnitude(i ,j) = std::abs(grad_x) + std::abs(grad_y);
 //			}
 //		}
 
@@ -643,7 +650,7 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
 //			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
-//			visibilityConfidence[d] = 1.f - gradientMagnitude(x, y);
+//			visibilityConfidence[d] = 1.f-gradientMagnitude(x, y);
 			visibilityConfidence[d] = std::abs((position[d]-position_camera)*(normal[d]));
 			if(visibilityConfidence[d] != visibilityConfidence[d])
 			{	//visibilityConfidence[d]==NaN
@@ -693,13 +700,27 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> confidenceValues;
 		confidenceValues.setZero(width, height);
 
+		//Change current rendering camera, and reposition it correctly
 		qglviewer::Vec camera_position = camera->position();
-
 		m_schnapps->getSelectedView()->setCurrentCamera(camera, false);
-
 		camera->setPosition(camera_position);
 
-		float threshold = (camera->zFar()-camera->zNear())/32.f;
+//		float bb_diag_size = mh_generated->getBBdiagSize();
+
+
+		//TODO : Must be estimated relative to the z-buffer precision (non-linear)
+		/*
+		 * z_buffer_value = (1<<N) * ( a + b / z )
+		 * Where :
+		 * N = number of bits of Z precision
+		 * a = zFar / ( zFar - zNear )
+		 * b = zFar * zNear / ( zNear - zFar )
+		 * z = distance from the eye to the object
+		 *
+		 */
+		float threshold = 0.05f;
+
+//		const long int MAX_VALUE = pow(2, 32)-1;
 
 		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
 		{
@@ -715,19 +736,32 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 				mh_current->draw(m_shaderScalarFieldReal, CGoGN::Algo::Render::GL2::POINTS);
 
-				//Read pixels and store them in an array
-				glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depthImage.data());
-				glReadPixels(0, 0, width, height, GL_RED, GL_FLOAT, confidenceValues.data());
+				glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depthImage.data());	//Read pixels from depth map
+				glReadPixels(0, 0, width, height, GL_RED, GL_FLOAT, confidenceValues.data()); //Read pixels from color map to get confidence values
 				m_depthFBO->unbind();
 
 				depthImage = depthImage.array()*2-1;    //Set range to [-1;1]
 
 				depthImage = (depthImage.array()-existing_depthImage.array()).abs();
 
+				float n = camera->zNear(), f = camera->zFar();
+
 				for(int i = 0; i < depthImage.rows(); ++i)
 				{
 					for(int j = 0; j < depthImage.cols(); ++j)
 					{
+//						CGoGNout << depthImage(i, j) << CGoGNendl;
+
+//						GLfloat z_w = existing_depthImage(i, j);
+//						double z_w = depthImage(i,j);
+//						z_w /= (double)UINT_MAX;
+//						double z_w1 = depthImage(i,j)-1;
+//						z_w1 /= (double)UINT_MAX;
+
+//						double value = (f*n)/(z_w*(f-n)-f);	//Function to get z real value
+//						double value1 = (f*n)/(z_w1*(f-n)-f);	//Function to get z real value
+//						float value = - f*n * (f-n) / ((z_w * (f-n)-f)*(z_w * (f-n)-f));	//Derivative
+
 						if(depthImage(i,j) < threshold)
 						{
 							maxConfidenceValues(i,j) = std::max(maxConfidenceValues(i, j), confidenceValues(i, j));
@@ -736,6 +770,55 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 				}
 			}
 		}
+
+//		m_shaderScalarFieldReal->setAttributePosition(mh_generated->getVBO("position"));
+//		m_shaderScalarFieldReal->setAttributeScalar(mh_generated->getVBO("VisibilityConfidence"));
+
+//		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
+//		{
+//			if(it.key().compare(mh_generated->getName()) != 0)
+//			{
+//				MapHandler<PFP2>* mh_current = static_cast<MapHandler<PFP2>*>(mapParams.projectedMapSet[it.key()]);
+//				PFP2::MAP* current_map = mh_current->getMap();
+
+//				VertexAttribute<PFP2::VEC3, PFP2::MAP> positionCurrent = mh_current->getAttribute<PFP2::VEC3, VERTEX>("position");
+//				VertexAttribute<PFP2::VEC3, PFP2::MAP> normalCurrent = mh_current->getAttribute<PFP2::VEC3, VERTEX>("normal");
+//				VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesCurrent = mh_current->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
+//				VertexAttribute<float, PFP2::MAP> visibilityConfidenceCurrent = mh_current->getAttribute<float, VERTEX>("VisibilityConfidence");
+
+//				existing_depthImage = mapParams.depthImageSet[it.key()];
+//				Camera* current = mapParams.depthCameraSet[it.key()];
+
+//				camera_position = current->position();
+//				m_schnapps->getSelectedView()->setCurrentCamera(current, false);
+//				current->setPosition(camera_position);
+
+//				m_depthFBO->bind();
+//				glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
+
+//				mh_generated->draw(m_shaderScalarFieldReal, CGoGN::Algo::Render::GL2::POINTS);
+
+//				glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depthImage.data());	//Read pixels from depth map
+//				glReadPixels(0, 0, width, height, GL_RED, GL_FLOAT, confidenceValues.data()); //Read pixels from color map to get confidence values
+//				m_depthFBO->unbind();
+
+//				depthImage = depthImage.array()*2-1;    //Set range to [-1;1]
+
+//				depthImage = (depthImage.array()-existing_depthImage.array()).abs();
+
+//				TraversorV<PFP2::MAP> trav_vert_current(*current_map);
+//				for(Dart d = trav_vert_current.begin(); d != trav_vert_current.end(); d = trav_vert_current.next())
+//				{
+//					int x = imageCoordinatesCurrent[d].getXCoordinate(), y = imageCoordinatesCurrent[d].getYCoordinate();
+//					if(depthImage(x, y) < threshold && confidenceValues(x, y) > visibilityConfidenceCurrent[d])
+//					{
+//						positionCurrent[d] = PFP2::VEC3(0.f, 0.f, 0.f);
+//						normalCurrent[d] = PFP2::VEC3(0.f, 0.f, 0.f);
+//						visibilityConfidenceCurrent[d] = 0.f;
+//					}
+//				}
+//			}
+//		}
 
 		m_schnapps->getSelectedView()->setCurrentCamera("camera_0", false);
 
