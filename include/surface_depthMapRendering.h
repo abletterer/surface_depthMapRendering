@@ -88,7 +88,7 @@ public slots: //Python calls
 	void changePositionVBO(const QString& view, const QString& map, const QString& vbo);
 
 	void createCameras(const QString& mapName, int nbMax = 12);
-	void render(const QString& mapName, bool saveData = false, const QString& directory = "/home/blettere/Projets/Results/");
+	void render(const QString& mapName);
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
 
 	bool moveDownDecomposition(const QString& mapOrigin, const QString& mapGenerated);
@@ -97,7 +97,7 @@ public slots: //Python calls
 	bool savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
 	bool saveDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
 
-	bool saveMergedPointCloud(const QString& mapOrigin, const std::vector<QString>& mapNames, const QString& directory = "/home/blettere/Projets/Results/");
+	bool saveMergedPointCloud(const QString& mapOrigin, const QStringList& mapNames, const QString& directory = "/home/blettere/Projets/Results/");
 
 //	void applyFilter(const QString& mapOrigin, const QString& mapGenerated, std::vector<int>& f, int size_x, int size_y);
 	void normalEstimation(const QString& mapOrigin, const QString& mapGenerated);

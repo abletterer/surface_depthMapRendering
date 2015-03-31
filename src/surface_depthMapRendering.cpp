@@ -195,7 +195,7 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 	}
 }
 
-void Surface_DepthMapRendering_Plugin::render(const QString& mapName, bool saveData, const QString& directory)
+void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 {
 	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
 	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
@@ -220,9 +220,6 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, bool saveD
 		Utils::Chrono chrono;
 		chrono.start();
 
-		std::vector<QString> mapNames;
-		mapNames.reserve(mapParams.depthCameraSet.size());
-
 		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
 		{
 			Camera* camera = it.value();
@@ -231,8 +228,6 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, bool saveD
 
 			QString generatedName(mapName);
 			generatedName += "-" + cameraName;
-
-			mapNames.push_back(generatedName);
 
 			m_schnapps->getSelectedView()->setCurrentCamera(camera, false);
 
@@ -292,11 +287,6 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, bool saveD
 		CGoGNout << "pour " << mapParams.depthCameraSet.size() << " vue(s) différente(s) " << CGoGNflush;
 		CGoGNout << "de taille " << width << "x" << height << CGoGNflush;
 		CGoGNout << " sur un objet composé de " << mh_map->getMap()->getNbCells(VERTEX) << " point(s)" << CGoGNendl;
-
-		if(saveData)
-		{
-			saveMergedPointCloud(mapName, mapNames, directory);
-		}
 
 		m_schnapps->getSelectedView()->updateGL();
 	}
@@ -458,7 +448,7 @@ bool Surface_DepthMapRendering_Plugin::saveDepthMap(const QString& mapOrigin, co
 			return false;
 		}
 
-		for(unsigned int j = m_depthFBO->getHeight()-1; j >= 0; --j)
+		for(int j = m_depthFBO->getHeight()-1; j >= 0; --j)
 		{
 			for(unsigned int i = 0; i < m_depthFBO->getWidth(); ++i)
 			{
@@ -497,14 +487,14 @@ bool Surface_DepthMapRendering_Plugin::saveDepthMap(const QString& mapOrigin, co
 	return false;
 }
 
-bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOrigin, const std::vector<QString>& mapNames, const QString& directory)
+bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOrigin, const QStringList& mapNames, const QString& directory)
 {
 	if(!mapOrigin.isEmpty() && !mapNames.empty() && !directory.isEmpty())
 	{
 		std::vector<PFP2::MAP*> maps;
 		maps.reserve(mapNames.size());
 		std::vector<VertexAttribute<PFP2::VEC3, PFP2::MAP>> positions;
-		for(unsigned int i = 0; i < mapNames.size(); ++i)
+		for(int i = 0; i < mapNames.size(); ++i)
 		{
 			MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(m_schnapps->getMap(mapNames[i]));
 			if(mh_map)
@@ -626,24 +616,33 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 //		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> gradientMagnitude;
 //		gradientMagnitude.setZero(depthImage.rows(), depthImage.cols());
 
-//		//Calcul de l'intensité du gradient (sqrt(grad_x^2+grad_y^2))
+		//Calcul de l'intensité du gradient (sqrt(grad_x^2+grad_y^2))
 //		for(int i = 1; i < depthImage.rows()-1; ++i)
 //		{
 //			for(int j = 1; j < depthImage.cols()-1; ++j)
 //			{
-////				float grad_x = depthImage(i+1,j)-depthImage(i-1,j);
-////				float grad_y = depthImage(i,j+1)-depthImage(i,j-1);
+//				float grad_x = depthImage(i+1,j)-depthImage(i-1,j);
+//				float grad_y = depthImage(i,j+1)-depthImage(i,j-1);
 //				float grad_x = -1*depthImage(i-1,j-1) + 0*depthImage(i-1,j) + 1*depthImage(i-1,j+1)
 //							   + -2*depthImage(i,j-1) + 0*depthImage(i,j) + 2*depthImage(i,j+1)
 //							   + -1*depthImage(i+1,j-1) + 0*depthImage(i+1,j) + 1*depthImage(i+1,j+1);
 //				float grad_y = -1*depthImage(i-1,j-1) + -2*depthImage(i-1,j) + -1*depthImage(i-1,j+1)
 //							   + 0*depthImage(i,j-1) + 0*depthImage(i,j) + 0*depthImage(i,j+1)
 //							   + 1*depthImage(i+1,j-1) + 2*depthImage(i+1,j) + 1*depthImage(i+1,j+1);
-////				gradientMagnitude(i, j) = sqrt(grad_x*grad_x+grad_y*grad_y);
+//				float moy = 1*depthImage(i-1,j-1) + 1*depthImage(i-1,j) + 1*depthImage(i-1,j+1)
+//							   + 1*depthImage(i,j-1) + 0*depthImage(i,j) + 1*depthImage(i,j+1)
+//							   + 1*depthImage(i+1,j-1) + 1*depthImage(i+1,j) + 1*depthImage(i+1,j+1);
+//				moy /= 8;
+//				float grad_y = 1*depthImage(i-1,j-1) + 1*depthImage(i-1,j) + 1*depthImage(i-1,j+1)
+//							   + 1*depthImage(i,j-1) + 0*depthImage(i,j) + 1*depthImage(i,j+1)
+//							   + 1*depthImage(i+1,j-1) + 1*depthImage(i+1,j) + 1*depthImage(i+1,j+1);
+//				gradientMagnitude(i, j) = sqrt(grad_x*grad_x+grad_y*grad_y);
 //				gradientMagnitude(i ,j) = std::abs(grad_x) + std::abs(grad_y);
+//				gradientMagnitude(i, j) = depthImage(i, j)-moy;
 //			}
 //		}
 
+//		gradientMagnitude = gradientMagnitude.array().abs();
 //		gradientMagnitude = gradientMagnitude.array()/(gradientMagnitude.maxCoeff());
 
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
@@ -651,7 +650,8 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 		{
 //			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
 //			visibilityConfidence[d] = 1.f-gradientMagnitude(x, y);
-			visibilityConfidence[d] = std::abs((position[d]-position_camera)*(normal[d]));
+//			visibilityConfidence[d] *= 1.f-gradientMagnitude(x, y);
+			visibilityConfidence[d] = (position_camera-position[d])*(normal[d]);
 			if(visibilityConfidence[d] != visibilityConfidence[d])
 			{	//visibilityConfidence[d]==NaN
 				visibilityConfidence[d] = 0.f;
@@ -718,7 +718,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		 * z = distance from the eye to the object
 		 *
 		 */
-		float threshold = 0.05f;
+		float threshold = 0.1f;
 
 //		const long int MAX_VALUE = pow(2, 32)-1;
 
@@ -753,14 +753,14 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 //						CGoGNout << depthImage(i, j) << CGoGNendl;
 
 //						GLfloat z_w = existing_depthImage(i, j);
+//						z_w = z_w*0.5f+0.5f;
 //						double z_w = depthImage(i,j);
 //						z_w /= (double)UINT_MAX;
-//						double z_w1 = depthImage(i,j)-1;
-//						z_w1 /= (double)UINT_MAX;
 
-//						double value = (f*n)/(z_w*(f-n)-f);	//Function to get z real value
-//						double value1 = (f*n)/(z_w1*(f-n)-f);	//Function to get z real value
-//						float value = - f*n * (f-n) / ((z_w * (f-n)-f)*(z_w * (f-n)-f));	//Derivative
+//						float value = (f*n)/(z_w*(f-n)-f);	//Function to get z real value
+//						float value = - ((f*n) * (f-n)) / ((z_w*(f-n)-f)*(z_w*(f-n)-f));	//Derivative of z-buffer
+
+//						CGoGNout << value << CGoGNendl;
 
 						if(depthImage(i,j) < threshold)
 						{
