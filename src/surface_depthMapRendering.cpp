@@ -329,24 +329,24 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels = mapParams.depthImageSet[mapGenerated];
 
-		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
-		Dart next;
-		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
-		{
-			next = trav_face_map.next();
-			bool stop = false;
-			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
-			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
-			{
-				GLfloat color = pixels(imageCoordinatesGenerated[dd].getXCoordinate(),imageCoordinatesGenerated[dd].getYCoordinate());
-				if(fabs(1 - color) < FLT_EPSILON)
-				{
-					//Le point fait partie du fond de l'image
-					generated_map->deleteFace(d);
-					stop = true;
-				}
-			}
-		}
+//		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
+//		Dart next;
+//		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
+//		{
+//			next = trav_face_map.next();
+//			bool stop = false;
+//			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
+//			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
+//			{
+//				GLfloat color = pixels(imageCoordinatesGenerated[dd].getXCoordinate(),imageCoordinatesGenerated[dd].getYCoordinate());
+//				if(fabs(1 - color) < FLT_EPSILON)
+//				{
+//					//Le point fait partie du fond de l'image
+//					generated_map->deleteFace(d);
+//					stop = true;
+//				}
+//			}
+//		}
 
 		GLdouble mvp_matrix[16];
 		camera->getModelViewProjectionMatrix(mvp_matrix);
@@ -368,13 +368,17 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		{
 			float color = pixels(imageCoordinatesGenerated[d].getXCoordinate(),imageCoordinatesGenerated[d].getYCoordinate());
 
-			PFP2::VEC4 pos = PFP2::VEC4(planeCoordinatesGenerated[d][0], planeCoordinatesGenerated[d][1], color, 1.f);
+			if(fabs(1-color) > FLT_EPSILON)
+			{
+				PFP2::VEC4 pos = PFP2::VEC4(planeCoordinatesGenerated[d][0], planeCoordinatesGenerated[d][1], color, 1.f);
 
-			pos = model_view_projection_matrix_inv*pos;
+				pos = model_view_projection_matrix_inv*pos;
 
-			positionGenerated[d] = PFP2::VEC3(pos[0]/pos[3], pos[1]/pos[3], pos[2]/pos[3]);
+				positionGenerated[d] = PFP2::VEC3(pos[0]/pos[3], pos[1]/pos[3], pos[2]/pos[3]);
+			}
 		}
 
+		mh_generated->notifyConnectivityModification(false);
 		mh_generated->notifyAttributeModification(positionGenerated, false);
 		mh_generated->updateBB(positionGenerated);
 	}
@@ -565,11 +569,17 @@ void Surface_DepthMapRendering_Plugin::normalEstimation(const QString& mapOrigin
 					= Eigen::Vector3f(position[d][0], position[d][1], position[d][2]);
 		}
 
-		for(int i = 0; i < matrix.rows()-1; ++i)
+		for(int i = 0; i < matrix.rows()-height; ++i)
 		{
-			Eigen::Vector3f u = matrix.row(i+height)-matrix.row(i);	//(x+1;y)-(x;y)
-			Eigen::Vector3f v = matrix.row(i+1)-matrix.row(i);	//(x;y+1)-(x;y)
-			matrix.row(i) = (u.cross(v)).normalized();
+			float x1 = matrix(i+height, 0), y1 = matrix(i+height, 1), z1 = matrix(i+height,2);
+			float x2 = matrix(i+1, 0), y2 = matrix(i+1, 1), z2 = matrix(i+1,2);
+			if((fabs(x1) > FLT_EPSILON || fabs(y1) > FLT_EPSILON || fabs(z1) > FLT_EPSILON)
+			   && (fabs(x2) > FLT_EPSILON || fabs(y2) > FLT_EPSILON || fabs(z2) > FLT_EPSILON))
+			{
+				Eigen::Vector3f u = matrix.row(i+height)-matrix.row(i);	//(x+1;y)-(x;y)
+				Eigen::Vector3f v = matrix.row(i+1)-matrix.row(i);	//(x;y+1)-(x;y)
+				matrix.row(i) = (u.cross(v)).normalized();
+			}
 		}
 
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("normal");
@@ -578,9 +588,15 @@ void Surface_DepthMapRendering_Plugin::normalEstimation(const QString& mapOrigin
 		{
 			int pos_in_mat = imageCoordinates[d].getXCoordinate()*height+imageCoordinates[d].getYCoordinate();
 			normal[d] = PFP2::VEC3(matrix(pos_in_mat, 0), matrix(pos_in_mat, 1), matrix(pos_in_mat, 2));
+			if(normal[d] == position[d])
+			{
+				generated_map->deleteVertex(d);
+			}
 		}
 
-		mh_generated->notifyAttributeModification(normal);
+		mh_generated->notifyConnectivityModification(false);
+		mh_generated->notifyAttributeModification(normal, false);
+		mh_generated->updateBB(position);
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
 	}
@@ -604,54 +620,19 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 
 		MapParameters& mapParams = m_mapParameterSet[mh_origin];
 		Camera* camera = mapParams.depthCameraSet[mapGenerated];
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> depthImage = mapParams.depthImageSet[mapGenerated];
 
 		PFP2::VEC3 position_camera(camera->position().x, camera->position().y, camera->position().z);
 
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("normal");
-//		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->addAttribute<float, VERTEX>("VisibilityConfidence");
-
-//		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> gradientMagnitude;
-//		gradientMagnitude.setZero(depthImage.rows(), depthImage.cols());
-
-		//Calcul de l'intensité du gradient (sqrt(grad_x^2+grad_y^2))
-//		for(int i = 1; i < depthImage.rows()-1; ++i)
-//		{
-//			for(int j = 1; j < depthImage.cols()-1; ++j)
-//			{
-//				float grad_x = depthImage(i+1,j)-depthImage(i-1,j);
-//				float grad_y = depthImage(i,j+1)-depthImage(i,j-1);
-//				float grad_x = -1*depthImage(i-1,j-1) + 0*depthImage(i-1,j) + 1*depthImage(i-1,j+1)
-//							   + -2*depthImage(i,j-1) + 0*depthImage(i,j) + 2*depthImage(i,j+1)
-//							   + -1*depthImage(i+1,j-1) + 0*depthImage(i+1,j) + 1*depthImage(i+1,j+1);
-//				float grad_y = -1*depthImage(i-1,j-1) + -2*depthImage(i-1,j) + -1*depthImage(i-1,j+1)
-//							   + 0*depthImage(i,j-1) + 0*depthImage(i,j) + 0*depthImage(i,j+1)
-//							   + 1*depthImage(i+1,j-1) + 2*depthImage(i+1,j) + 1*depthImage(i+1,j+1);
-//				float moy = 1*depthImage(i-1,j-1) + 1*depthImage(i-1,j) + 1*depthImage(i-1,j+1)
-//							   + 1*depthImage(i,j-1) + 0*depthImage(i,j) + 1*depthImage(i,j+1)
-//							   + 1*depthImage(i+1,j-1) + 1*depthImage(i+1,j) + 1*depthImage(i+1,j+1);
-//				moy /= 8;
-//				float grad_y = 1*depthImage(i-1,j-1) + 1*depthImage(i-1,j) + 1*depthImage(i-1,j+1)
-//							   + 1*depthImage(i,j-1) + 0*depthImage(i,j) + 1*depthImage(i,j+1)
-//							   + 1*depthImage(i+1,j-1) + 1*depthImage(i+1,j) + 1*depthImage(i+1,j+1);
-//				gradientMagnitude(i, j) = sqrt(grad_x*grad_x+grad_y*grad_y);
-//				gradientMagnitude(i ,j) = std::abs(grad_x) + std::abs(grad_y);
-//				gradientMagnitude(i, j) = depthImage(i, j)-moy;
-//			}
-//		}
-
-//		gradientMagnitude = gradientMagnitude.array().abs();
-//		gradientMagnitude = gradientMagnitude.array()/(gradientMagnitude.maxCoeff());
 
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
-//			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
-//			visibilityConfidence[d] = 1.f-gradientMagnitude(x, y);
-//			visibilityConfidence[d] *= 1.f-gradientMagnitude(x, y);
-			visibilityConfidence[d] = (position_camera-position[d])*(normal[d]);
+			PFP2::VEC3 u = position_camera-position[d];
+			u.normalize();
+			visibilityConfidence[d] = u*normal[d];
 			if(visibilityConfidence[d] != visibilityConfidence[d])
 			{	//visibilityConfidence[d]==NaN
 				visibilityConfidence[d] = 0.f;
@@ -705,22 +686,13 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		m_schnapps->getSelectedView()->setCurrentCamera(camera, false);
 		camera->setPosition(camera_position);
 
-//		float bb_diag_size = mh_generated->getBBdiagSize();
+		float n = camera->zNear(), f = camera->zFar();
 
+		float threshold = 20.f*mh_origin->getBBdiagSize();
 
-		//TODO : Must be estimated relative to the z-buffer precision (non-linear)
-		/*
-		 * z_buffer_value = (1<<N) * ( a + b / z )
-		 * Where :
-		 * N = number of bits of Z precision
-		 * a = zFar / ( zFar - zNear )
-		 * b = zFar * zNear / ( zNear - zFar )
-		 * z = distance from the eye to the object
-		 *
-		 */
-		float threshold = 0.1f;
+		threshold = (f*n)/(threshold*(f-n)-f);
 
-//		const long int MAX_VALUE = pow(2, 32)-1;
+		CGoGNout << threshold << CGoGNendl;
 
 		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
 		{
@@ -744,25 +716,23 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 				depthImage = (depthImage.array()-existing_depthImage.array()).abs();
 
-				float n = camera->zNear(), f = camera->zFar();
-
 				for(int i = 0; i < depthImage.rows(); ++i)
 				{
 					for(int j = 0; j < depthImage.cols(); ++j)
 					{
-//						CGoGNout << depthImage(i, j) << CGoGNendl;
 
-//						GLfloat z_w = existing_depthImage(i, j);
-//						z_w = z_w*0.5f+0.5f;
-//						double z_w = depthImage(i,j);
-//						z_w /= (double)UINT_MAX;
+						/* TODO : Calcul de la distance du point courant à la caméra pour calculer le seuil de précision
+						 *
+						 * z_w = valeur de profondeur de l'image ; dans l'intervalle [0;1]
+						 * n = distance non signée du zNear à la caméra
+						 * f = distance non signée du zFar à la caméra
+						 * (f*n)/(z_w*(f-n)-f) => Fonction qui calcule la distance d'un point à la caméra, selon la valeur de profondeur de la carte de profondeur
+						 * - ((f*n) * (f-n)) / ((z_w*(f-n)-f)*(z_w*(f-n)-f)) => Dérivée 1ère de la fonction précédente
+						 */
 
-//						float value = (f*n)/(z_w*(f-n)-f);	//Function to get z real value
-//						float value = - ((f*n) * (f-n)) / ((z_w*(f-n)-f)*(z_w*(f-n)-f));	//Derivative of z-buffer
 
-//						CGoGNout << value << CGoGNendl;
 
-						if(depthImage(i,j) < threshold)
+						if(depthImage(i,j) <= threshold)
 						{
 							maxConfidenceValues(i,j) = std::max(maxConfidenceValues(i, j), confidenceValues(i, j));
 						}
@@ -770,55 +740,6 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 				}
 			}
 		}
-
-//		m_shaderScalarFieldReal->setAttributePosition(mh_generated->getVBO("position"));
-//		m_shaderScalarFieldReal->setAttributeScalar(mh_generated->getVBO("VisibilityConfidence"));
-
-//		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
-//		{
-//			if(it.key().compare(mh_generated->getName()) != 0)
-//			{
-//				MapHandler<PFP2>* mh_current = static_cast<MapHandler<PFP2>*>(mapParams.projectedMapSet[it.key()]);
-//				PFP2::MAP* current_map = mh_current->getMap();
-
-//				VertexAttribute<PFP2::VEC3, PFP2::MAP> positionCurrent = mh_current->getAttribute<PFP2::VEC3, VERTEX>("position");
-//				VertexAttribute<PFP2::VEC3, PFP2::MAP> normalCurrent = mh_current->getAttribute<PFP2::VEC3, VERTEX>("normal");
-//				VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesCurrent = mh_current->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
-//				VertexAttribute<float, PFP2::MAP> visibilityConfidenceCurrent = mh_current->getAttribute<float, VERTEX>("VisibilityConfidence");
-
-//				existing_depthImage = mapParams.depthImageSet[it.key()];
-//				Camera* current = mapParams.depthCameraSet[it.key()];
-
-//				camera_position = current->position();
-//				m_schnapps->getSelectedView()->setCurrentCamera(current, false);
-//				current->setPosition(camera_position);
-
-//				m_depthFBO->bind();
-//				glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
-
-//				mh_generated->draw(m_shaderScalarFieldReal, CGoGN::Algo::Render::GL2::POINTS);
-
-//				glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depthImage.data());	//Read pixels from depth map
-//				glReadPixels(0, 0, width, height, GL_RED, GL_FLOAT, confidenceValues.data()); //Read pixels from color map to get confidence values
-//				m_depthFBO->unbind();
-
-//				depthImage = depthImage.array()*2-1;    //Set range to [-1;1]
-
-//				depthImage = (depthImage.array()-existing_depthImage.array()).abs();
-
-//				TraversorV<PFP2::MAP> trav_vert_current(*current_map);
-//				for(Dart d = trav_vert_current.begin(); d != trav_vert_current.end(); d = trav_vert_current.next())
-//				{
-//					int x = imageCoordinatesCurrent[d].getXCoordinate(), y = imageCoordinatesCurrent[d].getYCoordinate();
-//					if(depthImage(x, y) < threshold && confidenceValues(x, y) > visibilityConfidenceCurrent[d])
-//					{
-//						positionCurrent[d] = PFP2::VEC3(0.f, 0.f, 0.f);
-//						normalCurrent[d] = PFP2::VEC3(0.f, 0.f, 0.f);
-//						visibilityConfidenceCurrent[d] = 0.f;
-//					}
-//				}
-//			}
-//		}
 
 		m_schnapps->getSelectedView()->setCurrentCamera("camera_0", false);
 
@@ -828,15 +749,37 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
 			if(visibilityConfidence[d] < maxConfidenceValues(x, y))
 			{
-				position[d] = PFP2::VEC3(0.f, 0.f, 0.f);
-				normal[d] = PFP2::VEC3(0.f, 0.f, 0.f);
-				visibilityConfidence[d] = 0.f;
+				generated_map->deleteVertex(d);
 			}
 		}
 
+		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
+		Dart next;
+		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
+		{
+			next = trav_face_map.next();
+			bool stop = false;
+			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
+			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
+			{
+				GLfloat color = existing_depthImage(imageCoordinates[dd].getXCoordinate(),imageCoordinates[dd].getYCoordinate());
+				if(fabs(1 - color) < FLT_EPSILON)
+				{
+					//Le point fait partie du fond de l'image
+					generated_map->deleteFace(d);
+					stop = true;
+				}
+			}
+		}
+
+		mh_generated->notifyConnectivityModification(false);
 		mh_generated->notifyAttributeModification(position, false);
+		mh_generated->updateVBO(position);
 		mh_generated->notifyAttributeModification(normal, false);
+		mh_generated->updateVBO(normal);
 		mh_generated->notifyAttributeModification(visibilityConfidence, false);
+		mh_generated->updateVBO(visibilityConfidence);
+		mh_generated->updateBB(position);
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
 	}
