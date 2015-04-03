@@ -95,7 +95,8 @@ public slots: //Python calls
 	bool moveUpDecomposition(const QString& mapOrigin, const QString& mapGenerated);
 
 	bool savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
-	bool saveDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
+	bool saveOriginalDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
+	bool saveModifiedDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
 
 	bool saveMergedPointCloud(const QString& mapOrigin, const QStringList& mapNames, const QString& directory = "/home/blettere/Projets/Results/");
 
@@ -104,6 +105,8 @@ public slots: //Python calls
 	void confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated);
 
 	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated);
+
+	void exportModelPly(const QString& mapName, const QString& directory = "/home/blettere/Projets/Results/");
 
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;

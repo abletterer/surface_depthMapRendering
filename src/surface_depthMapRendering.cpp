@@ -305,21 +305,21 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		MapParameters& mapParams = m_mapParameterSet[mhg_origin];
 		PFP2::MAP* generated_map = mh_generated->getMap();
 
-		VertexAttribute<PFP2::VEC3, PFP2::MAP> positionGenerated = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
-		if(!positionGenerated.isValid())
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
+		if(!position.isValid())
 		{
-			positionGenerated = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("position");
+			position = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("position");
 		}
 
-		VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
-		if(!planeCoordinatesGenerated.isValid())
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinates = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
+		if(!planeCoordinates.isValid())
 		{
 			CGoGNerr << "PlaneCoordinates attribute is not valid" << CGoGNendl;
 			return;
 		}
 
-		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesGenerated = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
-		if(!imageCoordinatesGenerated.isValid())
+		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
+		if(!imageCoordinates.isValid())
 		{
 			CGoGNerr << "ImageCoordinates attribute is not valid" << CGoGNendl;
 			return;
@@ -366,21 +366,21 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
-			float color = pixels(imageCoordinatesGenerated[d].getXCoordinate(),imageCoordinatesGenerated[d].getYCoordinate());
+			float color = pixels(imageCoordinates[d].getXCoordinate(),imageCoordinates[d].getYCoordinate());
 
 			if(fabs(1-color) > FLT_EPSILON)
 			{
-				PFP2::VEC4 pos = PFP2::VEC4(planeCoordinatesGenerated[d][0], planeCoordinatesGenerated[d][1], color, 1.f);
+				PFP2::VEC4 pos = PFP2::VEC4(planeCoordinates[d][0], planeCoordinates[d][1], color, 1.f);
 
 				pos = model_view_projection_matrix_inv*pos;
 
-				positionGenerated[d] = PFP2::VEC3(pos[0]/pos[3], pos[1]/pos[3], pos[2]/pos[3]);
+				position[d] = PFP2::VEC3(pos[0]/pos[3], pos[1]/pos[3], pos[2]/pos[3]);
 			}
 		}
 
 		mh_generated->notifyConnectivityModification(false);
-		mh_generated->notifyAttributeModification(positionGenerated, false);
-		mh_generated->updateBB(positionGenerated);
+		mh_generated->notifyAttributeModification(position, false);
+		mh_generated->updateBB(position);
 	}
 }
 
@@ -418,7 +418,7 @@ bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin, 
 	return false;
 }
 
-bool Surface_DepthMapRendering_Plugin::saveDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory)
+bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory)
 {
 	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
 	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
@@ -445,7 +445,7 @@ bool Surface_DepthMapRendering_Plugin::saveDepthMap(const QString& mapOrigin, co
 		filename += mapGenerated;
 
 		std::ofstream out;
-		out.open(filename.toStdString() + "-depthMap.dat", std::ios::out);
+		out.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::out);
 		if(!out.good())
 		{
 			CGoGNerr << "Unable to open file" << CGoGNendl;
@@ -479,6 +479,75 @@ bool Surface_DepthMapRendering_Plugin::saveDepthMap(const QString& mapOrigin, co
 			for(int j = 0; j < 4; ++j)
 			{
 				out << mvp_matrix[i+4*j] << " " << std::flush;
+			}
+			out << std::endl;
+		}
+
+		out.close();
+
+		return true;
+	}
+
+	return false;
+}
+
+bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory)
+{
+	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
+	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
+
+	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
+	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
+
+	if(!directory.isEmpty() && mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
+	{
+		PFP2::MAP* generated_map = mh_generated->getMap();
+		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates,VERTEX>("ImageCoordinates");
+		if(!imageCoordinates.isValid())
+		{
+			CGoGNerr << "ImageCoordinates attribute is not valid" << CGoGNendl;
+			return false;
+		}
+
+		int width = m_depthFBO->getWidth(), height = m_depthFBO->getHeight();
+
+		MapParameters& mapParams = m_mapParameterSet[mh_origin];
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels = mapParams.depthImageSet[mapGenerated];
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixelsLeft;
+		pixelsLeft.setZero(width, height);
+
+		QString filename(directory);
+		filename += "/" + mapOrigin + "/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += "DepthMaps/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += QString::number(width) + "x" + QString::number(height) + "/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += mapGenerated;
+
+		std::ofstream out;
+		out.open(filename.toStdString() + "-modifiedDepthMap.dat", std::ios::out);
+		if(!out.good())
+		{
+			CGoGNerr << "Unable to open file" << CGoGNendl;
+			return false;
+		}
+
+		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
+		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
+		{
+			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
+			pixelsLeft(x, y) = pixels(x, y);
+		}
+
+		for(int j = height-1; j >= 0; --j)
+		{
+			for(int i = 0; i < width; ++i)
+			{
+				out << pixelsLeft(i, j) << " " << std::flush;
 			}
 			out << std::endl;
 		}
@@ -690,6 +759,14 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 		float threshold = 20.f*mh_origin->getBBdiagSize();
 
+		/*
+		 * z_w = valeur de profondeur de l'image ; dans l'intervalle [0;1]
+		 * n = distance non signée du zNear à la caméra
+		 * f = distance non signée du zFar à la caméra
+		 * (f*n)/(z_w*(f-n)-f) => Fonction qui calcule la distance d'un point à la caméra, selon la valeur de profondeur de la carte de profondeur
+		 * - ((f*n) * (f-n)) / ((z_w*(f-n)-f)*(z_w*(f-n)-f)) => Dérivée 1ère de la fonction précédente
+		 */
+
 		threshold = (f*n)/(threshold*(f-n)-f);
 
 		CGoGNout << threshold << CGoGNendl;
@@ -720,18 +797,6 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 				{
 					for(int j = 0; j < depthImage.cols(); ++j)
 					{
-
-						/* TODO : Calcul de la distance du point courant à la caméra pour calculer le seuil de précision
-						 *
-						 * z_w = valeur de profondeur de l'image ; dans l'intervalle [0;1]
-						 * n = distance non signée du zNear à la caméra
-						 * f = distance non signée du zFar à la caméra
-						 * (f*n)/(z_w*(f-n)-f) => Fonction qui calcule la distance d'un point à la caméra, selon la valeur de profondeur de la carte de profondeur
-						 * - ((f*n) * (f-n)) / ((z_w*(f-n)-f)*(z_w*(f-n)-f)) => Dérivée 1ère de la fonction précédente
-						 */
-
-
-
 						if(depthImage(i,j) <= threshold)
 						{
 							maxConfidenceValues(i,j) = std::max(maxConfidenceValues(i, j), confidenceValues(i, j));
@@ -782,6 +847,26 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		mh_generated->updateBB(position);
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
+	}
+}
+
+void Surface_DepthMapRendering_Plugin::exportModelPly(const QString &mapName, const QString& directory)
+{
+	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
+	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
+
+	if(mh_map && !mapName.isEmpty() && !directory.isEmpty())
+	{
+		PFP2::MAP* map = mh_map->getMap();
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_map->getAttribute<PFP2::VEC3, VERTEX>("position");
+
+		QString filename(directory);
+		filename += "/" + mapName + "/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += mapName + "-originalModel.ply";
+
+		Algo::Surface::Export::exportPLY<PFP2>(*map, position, filename.toStdString().c_str(), false);
 	}
 }
 
