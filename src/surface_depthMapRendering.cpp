@@ -329,25 +329,6 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels = mapParams.depthImageSet[mapGenerated];
 
-//		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
-//		Dart next;
-//		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
-//		{
-//			next = trav_face_map.next();
-//			bool stop = false;
-//			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
-//			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
-//			{
-//				GLfloat color = pixels(imageCoordinatesGenerated[dd].getXCoordinate(),imageCoordinatesGenerated[dd].getYCoordinate());
-//				if(fabs(1 - color) < FLT_EPSILON)
-//				{
-//					//Le point fait partie du fond de l'image
-//					generated_map->deleteFace(d);
-//					stop = true;
-//				}
-//			}
-//		}
-
 		GLdouble mvp_matrix[16];
 		camera->getModelViewProjectionMatrix(mvp_matrix);
 
@@ -769,8 +750,6 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 		threshold = (f*n)/(threshold*(f-n)-f);
 
-		CGoGNout << threshold << CGoGNendl;
-
 		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
 		{
 			if(it.key().compare(mh_generated->getName()) != 0)
@@ -818,6 +797,37 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 			}
 		}
 
+		mh_generated->notifyConnectivityModification(false);
+		mh_generated->notifyAttributeModification(position, false);
+		mh_generated->notifyAttributeModification(normal, false);
+		mh_generated->notifyAttributeModification(visibilityConfidence, false);
+		mh_generated->notifyAttributeModification(imageCoordinates, false);
+		mh_generated->updateBB(position);
+
+		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
+	}
+}
+
+void Surface_DepthMapRendering_Plugin::deleteBackground(const QString& mapOrigin, const QString& mapGenerated)
+{
+	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
+	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
+
+	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
+	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
+
+	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
+	{
+		MapParameters& mapParams = m_mapParameterSet[mh_origin];
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& existing_depthImage = mapParams.depthImageSet[mapGenerated];
+
+		PFP2::MAP* generated_map = mh_generated->getMap();
+
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("normal");
+		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->getAttribute<float, VERTEX>("VisibilityConfidence");
+		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
+
 		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
 		Dart next;
 		for(Dart d = trav_face_map.begin(); d != trav_face_map.end(); d = next)
@@ -839,14 +849,10 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 		mh_generated->notifyConnectivityModification(false);
 		mh_generated->notifyAttributeModification(position, false);
-		mh_generated->updateVBO(position);
 		mh_generated->notifyAttributeModification(normal, false);
-		mh_generated->updateVBO(normal);
 		mh_generated->notifyAttributeModification(visibilityConfidence, false);
-		mh_generated->updateVBO(visibilityConfidence);
+		mh_generated->notifyAttributeModification(imageCoordinates, false);
 		mh_generated->updateBB(position);
-
-		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
 	}
 }
 

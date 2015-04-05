@@ -106,6 +106,8 @@ public slots: //Python calls
 
 	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated);
 
+	void deleteBackground(const QString& mapOrigin, const QString& mapGenerated);
+
 	void exportModelPly(const QString& mapName, const QString& directory = "/home/blettere/Projets/Results/");
 
 private:
