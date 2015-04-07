@@ -359,6 +359,8 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 			}
 		}
 
+		generated_map->removeAttribute(planeCoordinates);
+
 		mh_generated->notifyConnectivityModification(false);
 		mh_generated->notifyAttributeModification(position, false);
 		mh_generated->updateBB(position);
@@ -495,7 +497,7 @@ bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOr
 		MapParameters& mapParams = m_mapParameterSet[mh_origin];
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels = mapParams.depthImageSet[mapGenerated];
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixelsLeft;
-		pixelsLeft.setZero(width, height);
+		pixelsLeft.setOnes(width, height);
 
 		QString filename(directory);
 		filename += "/" + mapOrigin + "/";
@@ -689,6 +691,8 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 			}
 		}
 
+		generated_map->removeAttribute(normal);
+
 		mh_generated->notifyAttributeModification(visibilityConfidence, false);
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
@@ -716,7 +720,6 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 		PFP2::MAP* generated_map = mh_generated->getMap();
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
-		VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("normal");
 		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->getAttribute<float, VERTEX>("VisibilityConfidence");
 
@@ -736,19 +739,17 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		m_schnapps->getSelectedView()->setCurrentCamera(camera, false);
 		camera->setPosition(camera_position);
 
-		float n = camera->zNear(), f = camera->zFar();
-
-		float threshold = 20.f*mh_origin->getBBdiagSize();
+		GLfloat n = fabs(camera->zNear()), f = fabs(camera->zFar());
+		GLfloat bb_diag_size = mh_generated->getBBdiagSize();
 
 		/*
 		 * z_w = valeur de profondeur de l'image ; dans l'intervalle [0;1]
 		 * n = distance non signée du zNear à la caméra
 		 * f = distance non signée du zFar à la caméra
-		 * (f*n)/(z_w*(f-n)-f) => Fonction qui calcule la distance d'un point à la caméra, selon la valeur de profondeur de la carte de profondeur
+		 * p = (f*n)/(z_w*(f-n)-f) => Fonction qui calcule la distance d'un point à la caméra, selon la valeur de profondeur de la carte de profondeur
 		 * - ((f*n) * (f-n)) / ((z_w*(f-n)-f)*(z_w*(f-n)-f)) => Dérivée 1ère de la fonction précédente
+		 * z_w = (f*(p+n))/(p*(f-n)) => Fonction inverse qui pour une distance d'un point à la caméra, donne sa valeur de profondeur
 		 */
-
-		threshold = (f*n)/(threshold*(f-n)-f);
 
 		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
 		{
@@ -770,15 +771,20 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 				depthImage = depthImage.array()*2-1;    //Set range to [-1;1]
 
-				depthImage = (depthImage.array()-existing_depthImage.array()).abs();
+				depthImage = (existing_depthImage.array()-depthImage.array()).abs();
 
 				for(int i = 0; i < depthImage.rows(); ++i)
 				{
 					for(int j = 0; j < depthImage.cols(); ++j)
 					{
-						if(depthImage(i,j) <= threshold)
+						GLfloat z_w = 0.5*existing_depthImage(i, j)+0.5;	//Set value in [0;1]
+						GLdouble upper_bound = (f*n)/(z_w*(f-n)-f);
+						GLdouble lower_bound = upper_bound;
+						upper_bound += (f-n)/100.f, lower_bound -= (f-n)/100.f;
+						upper_bound = (f*((upper_bound)+n))/((upper_bound)*(f-n)), lower_bound = (f*((lower_bound)+n))/((lower_bound)*(f-n));
+						if(depthImage(i, j) < fabs(upper_bound-lower_bound))
 						{
-							maxConfidenceValues(i,j) = std::max(maxConfidenceValues(i, j), confidenceValues(i, j));
+							maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), confidenceValues(i, j));
 						}
 					}
 				}
@@ -799,7 +805,6 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 		mh_generated->notifyConnectivityModification(false);
 		mh_generated->notifyAttributeModification(position, false);
-		mh_generated->notifyAttributeModification(normal, false);
 		mh_generated->notifyAttributeModification(visibilityConfidence, false);
 		mh_generated->notifyAttributeModification(imageCoordinates, false);
 		mh_generated->updateBB(position);
@@ -824,8 +829,6 @@ void Surface_DepthMapRendering_Plugin::deleteBackground(const QString& mapOrigin
 		PFP2::MAP* generated_map = mh_generated->getMap();
 
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
-		VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("normal");
-		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->getAttribute<float, VERTEX>("VisibilityConfidence");
 		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 
 		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
@@ -849,8 +852,6 @@ void Surface_DepthMapRendering_Plugin::deleteBackground(const QString& mapOrigin
 
 		mh_generated->notifyConnectivityModification(false);
 		mh_generated->notifyAttributeModification(position, false);
-		mh_generated->notifyAttributeModification(normal, false);
-		mh_generated->notifyAttributeModification(visibilityConfidence, false);
 		mh_generated->notifyAttributeModification(imageCoordinates, false);
 		mh_generated->updateBB(position);
 	}
