@@ -17,6 +17,7 @@ bool Surface_DepthMapRendering_Plugin::enable()
 	m_schnapps->addMenuAction(this, "Surface;Depth-map rendering", m_depthMapRenderingAction);
 
 	m_draw = false;
+	m_correspondance_done = false;
 
 	m_shaderSimpleColor = new CGoGN::Utils::ShaderSimpleColor();
 	m_shaderScalarFieldReal = new CGoGN::Utils::ShaderScalarFieldReal();
@@ -393,7 +394,14 @@ bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin, 
 		filename += QString::number(m_depthFBO->getWidth()) + "x" + QString::number(m_depthFBO->getHeight()) + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
-		filename += mapGenerated + ".ply";
+		if(m_correspondance_done)
+		{
+			filename += mapGenerated + "-Without.ply";
+		}
+		else
+		{
+			filename += mapGenerated + "-With.ply";
+		}
 
 		return Algo::Surface::Export::exportPLYVert<PFP2>(*generated_map, position, filename.toStdString().c_str(), false);
 	}
@@ -582,7 +590,14 @@ bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOr
 		filename += QString::number(m_depthFBO->getWidth()) + "x" + QString::number(m_depthFBO->getHeight()) + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
-		filename += mapOrigin + "-Merged.ply";
+		if(m_correspondance_done)
+		{
+			filename += mapOrigin + "-Merged-Without.ply";
+		}
+		else
+		{
+			filename += mapOrigin + "-Merged-With.ply";
+		}
 
 		return Algo::Surface::Export::exportPLYVertMaps<PFP2>(maps, positions, filename.toStdString().c_str(), false);
 	}
@@ -740,7 +755,6 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		camera->setPosition(camera_position);
 
 		GLfloat n = fabs(camera->zNear()), f = fabs(camera->zFar());
-		GLfloat bb_diag_size = mh_generated->getBBdiagSize();
 
 		/*
 		 * z_w = valeur de profondeur de l'image ; dans l'intervalle [0;1]
@@ -810,6 +824,8 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		mh_generated->updateBB(position);
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
+
+		m_correspondance_done = true;
 	}
 }
 
@@ -857,7 +873,7 @@ void Surface_DepthMapRendering_Plugin::deleteBackground(const QString& mapOrigin
 	}
 }
 
-void Surface_DepthMapRendering_Plugin::exportModelPly(const QString &mapName, const QString& directory)
+void Surface_DepthMapRendering_Plugin::exportModelPly(const QString& mapName, const QString& directory)
 {
 	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
 	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
@@ -875,6 +891,21 @@ void Surface_DepthMapRendering_Plugin::exportModelPly(const QString &mapName, co
 
 		Algo::Surface::Export::exportPLY<PFP2>(*map, position, filename.toStdString().c_str(), false);
 	}
+}
+
+bool Surface_DepthMapRendering_Plugin::moveDownDecomposition(const QString& mapOrigin, const QString& mapGenerated)
+{
+	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
+	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
+
+	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
+	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
+
+	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
+	{
+		MapParameters& mapParams = m_mapParameterSet[mh_origin];
+	}
+	return false;
 }
 
 #ifndef DEBUG

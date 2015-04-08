@@ -91,9 +91,6 @@ public slots: //Python calls
 	void render(const QString& mapName);
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
 
-	bool moveDownDecomposition(const QString& mapOrigin, const QString& mapGenerated);
-	bool moveUpDecomposition(const QString& mapOrigin, const QString& mapGenerated);
-
 	bool savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
 	bool saveOriginalDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
 	bool saveModifiedDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
@@ -110,6 +107,9 @@ public slots: //Python calls
 
 	void exportModelPly(const QString& mapName, const QString& directory = "/home/blettere/Projets/Results/");
 
+	bool moveDownDecomposition(const QString& mapOrigin, const QString& mapGenerated);
+	bool moveUpDecomposition(const QString& mapOrigin, const QString& mapGenerated);
+
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;
 	QAction* m_depthMapRenderingAction;
@@ -121,6 +121,7 @@ private:
 	CGoGN::Utils::ShaderScalarFieldReal* m_shaderScalarFieldReal;
 
 	bool m_draw;
+	bool m_correspondance_done;
 };
 
 } // namespace SCHNApps
