@@ -887,7 +887,7 @@ void Surface_DepthMapRendering_Plugin::exportModelPly(const QString& mapName, co
 		filename += "/" + mapName + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
-		filename += mapName + "-originalModel.ply";
+		filename += mapName + ".ply";
 
 		Algo::Surface::Export::exportPLY<PFP2>(*map, position, filename.toStdString().c_str(), false);
 	}
