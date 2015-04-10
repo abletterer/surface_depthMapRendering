@@ -580,6 +580,8 @@ bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOr
 			}
 		}
 
+		int width = m_depthFBO->getWidth(), height = m_depthFBO->getHeight();
+
 		QString filename(directory);
 		filename += "/" + mapOrigin + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
@@ -587,16 +589,16 @@ bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOr
 		filename += "PointClouds/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
-		filename += QString::number(m_depthFBO->getWidth()) + "x" + QString::number(m_depthFBO->getHeight()) + "/";
+		filename += QString::number(width) + "x" + QString::number(height) + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
 		if(m_correspondance_done)
 		{
-			filename += mapOrigin + "-Merged-Without.ply";
+			filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-Without.ply";
 		}
 		else
 		{
-			filename += mapOrigin + "-Merged-With.ply";
+			filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-With.ply";
 		}
 
 		return Algo::Surface::Export::exportPLYVertMaps<PFP2>(maps, positions, filename.toStdString().c_str(), false);
@@ -860,6 +862,7 @@ void Surface_DepthMapRendering_Plugin::deleteBackground(const QString& mapOrigin
 				if(fabs(1 - color) < FLT_EPSILON)
 				{
 					//Le point fait partie du fond de l'image
+					//position[d] = PFP2::VEC3(0.f, 0.f, 0.f);
 					generated_map->deleteFace(d);
 					stop = true;
 				}
