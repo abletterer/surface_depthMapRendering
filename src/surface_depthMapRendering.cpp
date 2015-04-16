@@ -855,7 +855,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 							GLfloat z_w = 0.5*existing_depthImage(i, j)+0.5;	//Set value in [0;1]
 							GLdouble upper_bound = (f*n)/(z_w*(f-n)-f);
 							GLdouble lower_bound = upper_bound;
-							upper_bound += (f-n)/100.f, lower_bound -= (f-n)/100.f;
+							upper_bound += (f-n)/70.f, lower_bound -= (f-n)/70.f;
 							upper_bound = (f*((upper_bound)+n))/((upper_bound)*(f-n)), lower_bound = (f*((lower_bound)+n))/((lower_bound)*(f-n));
 							if(depthImage(i, j) < fabs(upper_bound-lower_bound))
 							{
