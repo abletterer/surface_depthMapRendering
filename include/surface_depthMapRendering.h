@@ -3,10 +3,11 @@
 
 #include "plugin_interaction.h"
 
+#include "dialog_surface_depthMapRendering.h"
+
 #include "camera.h"
 #include "imageCoordinates.h"
 
-#include "dialog_surface_depthMapRendering.h"
 #include "Utils/Shaders/shaderSimpleColor.h"
 #include "Utils/Shaders/shaderScalarFieldReal.h"
 #include "Utils/fbo.h"
@@ -70,9 +71,7 @@ private:
 private slots:
 	void openDepthMapRenderingDialog();
 	void closeDepthMapRenderingDialog();
-
-	void moveDownFromDialog();
-	void moveUpFromDialog();
+	void lowerResolutionFromDialog();
 
 	//SCHNApps signals
 	void mapAdded(MapHandlerGen* map);
@@ -90,25 +89,25 @@ public slots: //Python calls
 	void createCameras(const QString& mapName, int nbMax = 12);
 	void render(const QString& mapName);
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
+	void lowerResolution(const QString& mapOrigin, const QString& mapGenerated);
 
+	/*
+	 * Export de données
+	 */
 	bool savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
 	bool saveOriginalDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
 	bool saveModifiedDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
-
 	bool saveMergedPointCloud(const QString& mapOrigin, const QStringList& mapNames, const QString& directory = "/home/blettere/Projets/Results/");
+	void exportModelPly(const QString& mapName, const QString& directory = "/home/blettere/Projets/Results/");
 
-//	void applyFilter(const QString& mapOrigin, const QString& mapGenerated, std::vector<int>& f, int size_x, int size_y);
+	/*
+	 * Recherche des correspondances de points
+	 */
 	void normalEstimation(const QString& mapOrigin, const QString& mapGenerated);
 	void confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated);
-
 	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated);
 
 	void deleteBackground(const QString& mapOrigin, const QString& mapGenerated);
-
-	void exportModelPly(const QString& mapName, const QString& directory = "/home/blettere/Projets/Results/");
-
-	bool moveDownDecomposition(const QString& mapOrigin, const QString& mapGenerated);
-	bool moveUpDecomposition(const QString& mapOrigin, const QString& mapGenerated);
 
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;

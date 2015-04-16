@@ -33,6 +33,7 @@ private:
 
 public slots:
 	void selectedMapChanged();
+	void selectedGeneratedMapChanged();
 	void addMapToList(MapHandlerGen* map);
 	void removeMapFromList(MapHandlerGen* map);
 };

@@ -20,6 +20,7 @@ Dialog_Surface_DepthMapRendering::Dialog_Surface_DepthMapRendering(SCHNApps* s) 
 	connect(m_schnapps, SIGNAL(mapRemoved(MapHandlerGen*)), this, SLOT(removeMapFromList(MapHandlerGen*)));
 
 	connect(list_maps, SIGNAL(itemSelectionChanged()), this, SLOT(selectedMapChanged()));
+	connect(list_maps_generated, SIGNAL(itemSelectionChanged()), this, SLOT(selectedGeneratedMapChanged()));
 
 	foreach(MapHandlerGen* map, m_schnapps->getMapSet().values())
 		list_maps->addItem(map->getName());
@@ -30,8 +31,22 @@ void Dialog_Surface_DepthMapRendering::selectedMapChanged()
 	QList<QListWidgetItem*> currentItems = list_maps->selectedItems();
 	if(!currentItems.empty())
 	{
-		const QString& mapname = currentItems[0]->text();
-		MapHandlerGen* mh = m_schnapps->getMap(mapname);
+		const QString& mapName = currentItems[0]->text();
+		MapHandlerGen* mh = m_schnapps->getMap(mapName);
+
+		m_selectedMap = mh;
+	}
+	else
+		m_selectedMap = NULL;
+}
+
+void Dialog_Surface_DepthMapRendering::selectedGeneratedMapChanged()
+{
+	QList<QListWidgetItem*> currentItems = list_maps_generated->selectedItems();
+	if(!currentItems.empty())
+	{
+		const QString& mapName = currentItems[0]->text();
+		MapHandlerGen* mh = m_schnapps->getMap(mapName);
 
 		m_selectedMap = mh;
 	}
