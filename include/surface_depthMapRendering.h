@@ -36,6 +36,7 @@ struct MapParameters
 
 	QHash<QString, Camera*> depthCameraSet;
 	QHash<QString, Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> > depthImageSet;
+	QHash<QString, int> decompositionLevelSet;
 	QHash<QString, MapHandlerGen*> projectedMapSet;
 };
 
@@ -115,7 +116,7 @@ private:
 
 	QHash<MapHandlerGen*, MapParameters> m_mapParameterSet;
 
-	CGoGN::Utils::FBO* m_depthFBO;
+	CGoGN::Utils::FBO* m_fbo;
 	CGoGN::Utils::ShaderSimpleColor* m_shaderSimpleColor;
 	CGoGN::Utils::ShaderScalarFieldReal* m_shaderScalarFieldReal;
 
