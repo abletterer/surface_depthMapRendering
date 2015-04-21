@@ -73,6 +73,7 @@ private slots:
 	void openDepthMapRenderingDialog();
 	void closeDepthMapRenderingDialog();
 	void lowerResolutionFromDialog();
+	void upperResolutionFromDialog();
 
 	//SCHNApps signals
 	void mapAdded(MapHandlerGen* map);
@@ -91,6 +92,7 @@ public slots: //Python calls
 	void render(const QString& mapName);
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
 	void lowerResolution(const QString& mapOrigin, const QString& mapGenerated);
+	void upperResolution(const QString& mapOrigin, const QString& mapGenerated);
 
 	/*
 	 * Export de données
@@ -108,6 +110,7 @@ public slots: //Python calls
 	void confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated);
 	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated);
 
+	void regenerateMap(const QString& mapOrigin, const QString& mapGenerated);
 	void deleteBackground(const QString& mapOrigin, const QString& mapGenerated);
 
 private:
