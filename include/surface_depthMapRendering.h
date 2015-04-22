@@ -112,6 +112,7 @@ public slots: //Python calls
 
 	void regenerateMap(const QString& mapOrigin, const QString& mapGenerated);
 	void deleteBackground(const QString& mapOrigin, const QString& mapGenerated);
+	void removeUselessAttributes(const QString& mapGenerated);
 
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;
