@@ -19,6 +19,7 @@
 #include "Eigen/Eigen"
 
 #include <fstream>
+#include <thread>
 
 namespace CGoGN
 {

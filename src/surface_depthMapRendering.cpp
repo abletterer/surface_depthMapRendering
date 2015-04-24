@@ -83,7 +83,7 @@ void Surface_DepthMapRendering_Plugin::lowerResolutionFromDialog()
 		if(mhg_map && m_mapParameterSet.contains(mhg_map))
 		{
 			MapParameters& mapParams = m_mapParameterSet[mhg_map];
-			for(QHash<QString, int>::iterator it = mapParams.decompositionLevelSet.begin(); it != mapParams.decompositionLevelSet.end(); ++it)
+			for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
 			{
 				lowerResolution(mapName, it.key());
 				deleteBackground(mapName, it.key());
@@ -412,32 +412,28 @@ void Surface_DepthMapRendering_Plugin::lowerResolution(const QString& mapOrigin,
 		{
 			Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& pixels = mapParams.depthImageSet[mapGenerated];
 
-			int img_width = m_fbo->getWidth(), img_height = m_fbo->getHeight();
+			const int img_width = m_fbo->getWidth(), img_height = m_fbo->getHeight();
 			++level;
-			int l_p = pow(2, level);
-			int width = img_width/l_p, height = img_height/l_p;
-			int width2 = width*2, height2 = height*2;
+			const int l_p = pow(2, level);
+			const int width = img_width/l_p, height = img_height/l_p;
+			const int width2 = width*2, height2 = height*2;
 
 			Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels_tmp(pixels);
 
-			float impair, pair_1, pair_2;
-			for(int i = 0; i < width2-1; ++i)
+			for(int j = 0; j < height2; ++j)
 			{
-				for(int j = 0; j < height2; ++j)
+				for(int i = 0; i < width2-1; i += 2)
 				{
-					if(i%2==0)
-					{
-						pixels(i/2, j) = pixels_tmp(i, j);
-					}
-					else
-					{
-						impair = pixels_tmp(i, j);
-						pair_1 = pixels_tmp(i-1, j);
-						pair_2 = pixels_tmp(i+1, j);
+					pixels(i/2, j) = pixels_tmp(i, j);
+				}
+				for(int i = 1; i < width2-1; i += 2)
+				{
+					float impair = pixels_tmp(i, j);
+					float pair_1 = pixels_tmp(i-1, j);
+					float pair_2 = pixels_tmp(i+1, j);
 
-						impair -= (pair_1+pair_2)/2.f;
-						pixels(width+i/2, j) = impair;
-					}
+					impair -= (pair_1+pair_2)/2.f;
+					pixels(width+i/2, j) = impair;
 				}
 			}
 
@@ -457,9 +453,9 @@ void Surface_DepthMapRendering_Plugin::lowerResolution(const QString& mapOrigin,
 				}
 				for(int j = 1; j < height2-1; j += 2)
 				{
-					impair = pixels_tmp(i, j);
-					pair_1 = pixels_tmp(i, j-1);
-					pair_2 = pixels_tmp(i, j+1);
+					float impair = pixels_tmp(i, j);
+					float pair_1 = pixels_tmp(i, j-1);
+					float pair_2 = pixels_tmp(i, j+1);
 
 					impair -= (pair_1+pair_2)/2.f;
 					pixels(i, height+j/2) = impair;
@@ -493,14 +489,13 @@ void Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin,
 		{
 			Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& pixels = mapParams.depthImageSet[mapGenerated];
 
-			int img_width = m_fbo->getWidth(), img_height = m_fbo->getHeight();
+			const int img_width = m_fbo->getWidth(), img_height = m_fbo->getHeight();
 			--level;
-			int l_p = pow(2, level);
-			int width = img_width/l_p, height = img_height/l_p;
+			const int l_p = pow(2, level);
+			const int width = img_width/l_p, height = img_height/l_p;
 
 			Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels_tmp(pixels);
 
-			float impair, pair_1, pair_2;
 			for(int j = 0; j < height; ++j)
 			{
 				for(int i = 0; i < width-1; i += 2)
@@ -510,9 +505,9 @@ void Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin,
 
 				for(int i = 1, i_2 = 0; i < width-1; i += 2, ++i_2)
 				{
-					impair = pixels_tmp(width/2+i_2, j);
-					pair_1 = pixels_tmp(i_2, j);
-					pair_2 = pixels_tmp(i_2+1, j);
+					float impair = pixels_tmp(width/2+i_2, j);
+					float pair_1 = pixels_tmp(i_2, j);
+					float pair_2 = pixels_tmp(i_2+1, j);
 
 					impair += (pair_1+pair_2)/2.f;
 					pixels(i, j) = impair;
@@ -535,9 +530,9 @@ void Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin,
 				}
 				for(int j = 1, j_2 = 0; j < height-1; j += 2, ++j_2)
 				{
-					impair = pixels_tmp(i, width/2+j_2);
-					pair_1 = pixels_tmp(i, j_2);
-					pair_2 = pixels_tmp(i, j_2+1);
+					float impair = pixels_tmp(i, width/2+j_2);
+					float pair_1 = pixels_tmp(i, j_2);
+					float pair_2 = pixels_tmp(i, j_2+1);
 
 					impair += (pair_1+pair_2)/2.f;
 					pixels(i, j) = impair;
@@ -743,22 +738,21 @@ bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOr
 	{
 		std::vector<PFP2::MAP*> maps;
 		maps.reserve(mapNames.size());
-		std::vector<VertexAttribute<PFP2::VEC3, PFP2::MAP>> positions;
+		std::vector<std::vector<VertexAttribute<PFP2::VEC3, PFP2::MAP>>> attributes;
 		for(int i = 0; i < mapNames.size(); ++i)
 		{
 			MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(m_schnapps->getMap(mapNames[i]));
 			if(mh_map)
 			{
+				std::vector<VertexAttribute<PFP2::VEC3, PFP2::MAP>> attribs;
 				PFP2::MAP* map = mh_map->getMap();
 				maps.push_back(map);
 
 				VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_map->getAttribute<PFP2::VEC3, VERTEX>("position");
-				if(!position.isValid())
-				{
-					CGoGNerr << "position attribute is not valid" << CGoGNendl;
-					return false;
-				}
-				positions.push_back(position);
+				VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_map->getAttribute<PFP2::VEC3, VERTEX>("normal");
+				attribs.push_back(position);
+				attribs.push_back(normal);
+				attributes.push_back(attribs);
 			}
 			else
 			{
@@ -787,7 +781,7 @@ bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOr
 			filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-With.ply";
 		}
 
-		return Algo::Surface::Export::exportPLYVertMaps<PFP2>(maps, positions, filename.toStdString().c_str(), false);
+		return Algo::Surface::Export::exportPLYVertMaps<PFP2>(maps, attributes, filename.toStdString().c_str(), false);
 	}
 
 	return false;
@@ -828,7 +822,6 @@ void Surface_DepthMapRendering_Plugin::normalEstimation(const QString& mapOrigin
 		chrono.start();
 
 		PFP2::MAP* generated_map = mh_generated->getMap();
-
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
 		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 
@@ -838,6 +831,7 @@ void Surface_DepthMapRendering_Plugin::normalEstimation(const QString& mapOrigin
 		matrix.setZero(width*height, 3);
 
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
+
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
 			matrix.row(imageCoordinates[d].getXCoordinate()*height+imageCoordinates[d].getYCoordinate())
@@ -901,7 +895,6 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("normal");
 		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->addAttribute<float, VERTEX>("VisibilityConfidence");
-		VertexAttribute<float, PFP2::MAP> gradientMagnitudeAttribute = mh_generated->addAttribute<float, VERTEX>("GradientMagnitude");
 		VertexAttribute<float, PFP2::MAP> label = mh_generated->addAttribute<float, VERTEX>("Label");
 
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> gradientMagnitude;
@@ -921,6 +914,7 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 		float mean = gradientMagnitude.mean();
 
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
+
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
@@ -1056,6 +1050,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		m_schnapps->getSelectedView()->setCurrentCamera("camera_0", false);
 
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
+
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
@@ -1151,6 +1146,7 @@ void Surface_DepthMapRendering_Plugin::deleteBackground(const QString& mapOrigin
 		PFP2::MAP* generated_map = mh_generated->getMap();
 
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("normal");
 		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 
 		TraversorF<PFP2::MAP> trav_face_map(*generated_map);
@@ -1160,6 +1156,7 @@ void Surface_DepthMapRendering_Plugin::deleteBackground(const QString& mapOrigin
 			next = trav_face_map.next();
 			bool stop = false;
 			Traversor2FV<PFP2::MAP> trav_vert_face_map(*generated_map, d);
+
 			for(Dart dd = trav_vert_face_map.begin(); !stop && dd != trav_vert_face_map.end(); dd = trav_vert_face_map.next())
 			{
 				GLfloat color = existing_depthImage(imageCoordinates[dd].getXCoordinate(),imageCoordinates[dd].getYCoordinate());
@@ -1173,9 +1170,14 @@ void Surface_DepthMapRendering_Plugin::deleteBackground(const QString& mapOrigin
 		}
 
 		mh_generated->notifyConnectivityModification(false);
-		mh_generated->notifyAttributeModification(position, false);
-		mh_generated->notifyAttributeModification(imageCoordinates, false);
+		if(position.isValid())
+			mh_generated->notifyAttributeModification(position, false);
+		if(normal.isValid())
+			mh_generated->notifyAttributeModification(normal, false);
+		if(imageCoordinates.isValid())
+			mh_generated->notifyAttributeModification(imageCoordinates, false);
 		mh_generated->updateBB(position);
+//		mh_generated->updateVBO(position);
 	}
 }
 
