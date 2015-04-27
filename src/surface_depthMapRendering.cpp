@@ -1018,7 +1018,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 				depthImage = (existing_depthImage.array()-depthImage.array()).abs();
 
-				#pragma omp parallel for
+//				#pragma omp parallel for
 				for(int i = 0; i < depthImage.rows(); ++i)
 				{
 					for(int j = 0; j < depthImage.cols(); ++j)
@@ -1030,10 +1030,13 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 							double lower_bound = upper_bound;
 							upper_bound += threshold, lower_bound -= threshold;
 							upper_bound = (f*(upper_bound+n))/(upper_bound*(f-n)), lower_bound = (f*(lower_bound+n))/(lower_bound*(f-n));
-							if(depthImage(i, j) < fabs(upper_bound-lower_bound)/2.f)
+							if(depthImage(i, j) < fabs(upper_bound-lower_bound)/2.f && labelValues(i, j) == labelValues(i, j))
 							{
-								Dart d = Dart::create(labelValues(i, j));
-								maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), visibilityConfidenceCurrent[d]);
+								Dart d = Dart::create(round(labelValues(i, j)));
+								if(d.label() < 4000000000)
+								{
+									maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), visibilityConfidenceCurrent[d]);
+								}
 							}
 						}
 					}
