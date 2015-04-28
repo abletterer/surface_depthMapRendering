@@ -841,7 +841,6 @@ void Surface_DepthMapRendering_Plugin::normalEstimation(const QString& mapOrigin
 					= Eigen::Vector3f(position[d][0], position[d][1], position[d][2]);
 		}
 
-		#pragma omp parallel for
 		for(int i = 0; i < matrix.rows()-height; ++i)
 		{
 			Eigen::Vector3f u = matrix.row(i+height)-matrix.row(i);	//(x+1;y)-(x;y)
@@ -892,7 +891,8 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->addAttribute<float, VERTEX>("VisibilityConfidence");
 		VertexAttribute<float, PFP2::MAP> label = mh_generated->addAttribute<float, VERTEX>("Label");
 
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> gradientMagnitude(depthImage.rows(), depthImage.cols());
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> gradientMagnitude;
+		gradientMagnitude.setZero(depthImage.rows(), depthImage.cols());
 
 		//Calcul de l'intensité du gradient (sqrt(grad_x^2+grad_y^2))
 		#pragma omp parallel for
@@ -900,36 +900,34 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 		{
 			for(int j = 1; j < depthImage.cols()-1; ++j)
 			{
-				float grad_x = depthImage(i+1,j)-depthImage(i-1,j);
-				float grad_y = depthImage(i,j+1)-depthImage(i,j-1);
+				float grad_x = (depthImage(i+1,j)-depthImage(i-1,j))/2.f;
+				float grad_y = (depthImage(i,j+1)-depthImage(i,j-1))/2.f;
 				gradientMagnitude(i, j) = sqrt(grad_x*grad_x+grad_y*grad_y);
 			}
 		}
 
-		float mean = gradientMagnitude.mean();
+		const float mean = gradientMagnitude.mean();
 
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
-
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
 			float color = depthImage(x, y);
 			if(fabs(1-color) > FLT_EPSILON && gradientMagnitude(x, y) < mean)
 			{
-				PFP2::VEC3 u = position_camera-position[d];
-				u.normalize();
+				PFP2::VEC3 u = (position_camera-position[d]).normalized();
 				visibilityConfidence[d] = u*normal[d];
 				if(visibilityConfidence[d] != visibilityConfidence[d])
 				{	//visibilityConfidence[d]==NaN
 					visibilityConfidence[d] = 0.f;
 				}
-				label[d] = d.label();
 			}
 			else
 			{
 				//Suppression du point de la carte de profondeur
 				depthImage(x, y) = 1.f;
 			}
+			label[d] = d.label();
 		}
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
@@ -958,7 +956,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		MapParameters& mapParams = m_mapParameterSet[mh_origin];
 
 		Camera* camera = mapParams.depthCameraSet[mapGenerated];
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& existing_depthImage = mapParams.depthImageSet[mapGenerated];
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& depthImage = mapParams.depthImageSet[mapGenerated];
 
 		PFP2::MAP* generated_map = mh_generated->getMap();
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
@@ -966,8 +964,10 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->getAttribute<float, VERTEX>("VisibilityConfidence");
 		const int width = m_fbo->getWidth(), height = m_fbo->getHeight();
 
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> depthImage(width, height);
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> labelValues(width, height);
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> currentDepthImage;
+		currentDepthImage.setOnes(width, height);
+		Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> labelValues;
+		labelValues.setZero(width, height);
 
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> maxConfidenceValues;
 		maxConfidenceValues.setZero(width, height);
@@ -987,9 +987,9 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		 */
 
 		const float n = fabs(camera->zNear()), f = fabs(camera->zFar());
-		const float threshold = (f-n)/60.f;
+		const float threshold = (f-n)/32.f;
 
-		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
+		for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
 		{
 			if(it.key().compare(mh_generated->getName()) != 0)
 			{
@@ -1006,37 +1006,37 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 				mh_current->draw(m_shaderScalarFieldReal, CGoGN::Algo::Render::GL2::POINTS);
 
 				glEnable(GL_TEXTURE_2D);
+
 				glBindTexture(GL_TEXTURE_2D, *m_fbo->getDepthTexId());
-				glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, depthImage.data());
+				glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, currentDepthImage.data());
 
 				glBindTexture(GL_TEXTURE_2D, *m_fbo->getColorTexId(0));
 				glGetTexImage(GL_TEXTURE_2D, 0, GL_RED, GL_FLOAT, labelValues.data());
+
 				glDisable(GL_TEXTURE_2D);
 				m_fbo->unbind();
 
-				depthImage = depthImage.array()*2-1;    //Set range to [-1;1]
+				currentDepthImage = currentDepthImage.array()*2-1;    //Set range to [-1;1]
 
-				depthImage = (existing_depthImage.array()-depthImage.array()).abs();
+				currentDepthImage = (depthImage.array()-currentDepthImage.array()).abs();
 
-//				#pragma omp parallel for
-				for(int i = 0; i < depthImage.rows(); ++i)
+				#pragma omp parallel for
+				for(int i = 0; i < currentDepthImage.rows(); ++i)
 				{
-					for(int j = 0; j < depthImage.cols(); ++j)
+					for(int j = 0; j < currentDepthImage.cols(); ++j)
 					{
-						if(fabs(1-existing_depthImage(i, j)) > FLT_EPSILON)
+						if(fabs(1-depthImage(i, j)) > FLT_EPSILON)
 						{
-							float z_w = 0.5*existing_depthImage(i, j)+0.5;	//Set value in [0;1]
+							float z_w = 0.5*depthImage(i, j)+0.5;	//Set value in [0;1]
 							double upper_bound = (f*n)/(z_w*(f-n)-f);
 							double lower_bound = upper_bound;
 							upper_bound += threshold, lower_bound -= threshold;
 							upper_bound = (f*(upper_bound+n))/(upper_bound*(f-n)), lower_bound = (f*(lower_bound+n))/(lower_bound*(f-n));
-							if(depthImage(i, j) < fabs(upper_bound-lower_bound)/2.f && labelValues(i, j) == labelValues(i, j))
+//							upper_bound = upper_bound*2-1, lower_bound = lower_bound*2-1;
+							if(currentDepthImage(i, j) < fabs(upper_bound-lower_bound))
 							{
-								Dart d = Dart::create(round(labelValues(i, j)));
-								if(d.label() < 4000000000)
-								{
-									maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), visibilityConfidenceCurrent[d]);
-								}
+								Dart d = Dart::create(labelValues(i, j));
+								maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), visibilityConfidenceCurrent[d]);
 							}
 						}
 					}
@@ -1054,7 +1054,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 			if(visibilityConfidence[d] < maxConfidenceValues(x, y))
 			{
 				//Suppression du point dans la carte de profondeur
-				existing_depthImage(x, y) = 1.f;
+				depthImage(x, y) = 1.f;
 			}
 		}
 
