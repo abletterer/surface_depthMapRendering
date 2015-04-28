@@ -987,7 +987,9 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		 */
 
 		const float n = fabs(camera->zNear()), f = fabs(camera->zFar());
-		const float threshold = (f-n)/32.f;
+		const float threshold = 1/70.f;
+
+		CGoGNout << n << " | " << f << CGoGNendl;
 
 		for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
 		{
@@ -1025,17 +1027,11 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 				{
 					for(int j = 0; j < currentDepthImage.cols(); ++j)
 					{
-						if(fabs(1-depthImage(i, j)) > FLT_EPSILON)
+						if(fabs(1-depthImage(i, j)) > FLT_EPSILON && currentDepthImage(i, j) < threshold)
 						{
-							float z_w = 0.5*depthImage(i, j)+0.5;	//Set value in [0;1]
-							double upper_bound = (f*n)/(z_w*(f-n)-f);
-							double lower_bound = upper_bound;
-							upper_bound += threshold, lower_bound -= threshold;
-							upper_bound = (f*(upper_bound+n))/(upper_bound*(f-n)), lower_bound = (f*(lower_bound+n))/(lower_bound*(f-n));
-//							upper_bound = upper_bound*2-1, lower_bound = lower_bound*2-1;
-							if(currentDepthImage(i, j) < fabs(upper_bound-lower_bound))
+							Dart d = Dart::create(labelValues(i, j));
+							if(d.label() < 4000000000)
 							{
-								Dart d = Dart::create(labelValues(i, j));
 								maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), visibilityConfidenceCurrent[d]);
 							}
 						}
