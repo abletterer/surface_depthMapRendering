@@ -18,6 +18,8 @@
 #include "Algo/Export/export.h"
 #include "Eigen/Eigen"
 
+#include "Container/fakeAttribute.h"
+
 #include <fstream>
 #include <thread>
 
@@ -39,6 +41,12 @@ struct MapParameters
 	QHash<QString, Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> > depthImageSet;
 	QHash<QString, int> decompositionLevelSet;
 	QHash<QString, MapHandlerGen*> projectedMapSet;
+};
+
+struct PointCorrespondance
+{
+	MapHandlerGen* map;
+	Dart vertex;
 };
 
 class Surface_DepthMapRendering_Plugin : public PluginInteraction
@@ -82,6 +90,7 @@ private slots:
 
 	//MapHandler signals
 	void vboRemoved(Utils::VBO* vbo);
+	void selectedCellsChanged(CellSelectorGen* cs);
 
 public slots: //Python calls
 
@@ -127,6 +136,8 @@ private:
 
 	bool m_draw;
 	bool m_correspondance_done;
+
+	MapHandlerGen* m_main_object;
 };
 
 } // namespace SCHNApps

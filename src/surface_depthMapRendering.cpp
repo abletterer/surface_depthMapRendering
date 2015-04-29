@@ -124,11 +124,13 @@ void Surface_DepthMapRendering_Plugin::upperResolutionFromDialog()
 void Surface_DepthMapRendering_Plugin::mapAdded(MapHandlerGen *map)
 {
 	connect(map, SIGNAL(vboRemoved(Utils::VBO*)), this, SLOT(vboRemoved(Utils::VBO*)));
+	connect(map, SIGNAL(selectedCellsChanged(CellSelectorGen*)), this, SLOT(selectedCellsChanged(CellSelectorGen*)));
 }
 
 void Surface_DepthMapRendering_Plugin::mapRemoved(MapHandlerGen *map)
 {
 	disconnect(map, SIGNAL(vboRemoved(Utils::VBO*)), this, SLOT(vboRemoved(Utils::VBO*)));
+	disconnect(map, SIGNAL(selectedCellsChanged(CellSelectorGen*)), this, SLOT(selectedCellsChanged(CellSelectorGen*)));
 }
 
 void Surface_DepthMapRendering_Plugin::vboRemoved(Utils::VBO *vbo)
@@ -141,6 +143,38 @@ void Surface_DepthMapRendering_Plugin::vboRemoved(Utils::VBO *vbo)
 		{
 			mapParams.positionVBO = NULL;
 		}
+	}
+}
+
+void Surface_DepthMapRendering_Plugin::selectedCellsChanged(CellSelectorGen* cs)
+{
+	MapHandlerGen* mhg_map = static_cast<MapHandlerGen*>(QObject::sender());
+	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
+
+	if(mh_map && m_main_object)
+	{
+		VertexAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, PFP2::MAP> correspondingPointsAttribute
+				= mh_map->getAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, VERTEX>("CorrespondingPoints");
+		if(!correspondingPointsAttribute.isValid())
+		{
+			CGoGNerr << "CorrespondingPoints attribute does not exist" << CGoGNendl;
+			return;
+		}
+
+		CellSelector<PFP2::MAP, VERTEX>* vertexSelector = static_cast<CellSelector<PFP2::MAP, VERTEX>*>(cs);
+		Vertex selected_point = vertexSelector->getSelectedCells()[0];
+
+		std::vector<PointCorrespondance>& correspondingPoints = correspondingPointsAttribute[selected_point];
+		for(std::vector<PointCorrespondance>::const_iterator it = correspondingPoints.begin(); it!=correspondingPoints.end(); ++it)
+		{
+			PointCorrespondance tmp = *it;
+			MapHandler<PFP2>* mh_current = static_cast<MapHandler<PFP2>*>(tmp.map);
+
+			CellSelector<PFP2::MAP, VERTEX>* vertexSelector = mh_current->getCellSelector<VERTEX>("selector");
+			vertexSelector->select(tmp.vertex, false);
+		}
+
+		m_schnapps->getSelectedView()->updateGL();
 	}
 }
 
@@ -157,6 +191,7 @@ void Surface_DepthMapRendering_Plugin::changePositionVBO(const QString& view, co
 	MapHandlerGen* m = m_schnapps->getMap(map);
 	if(v && m)
 	{
+		m_main_object = m;
 		Utils::VBO* vbuf = m->getVBO(vbo);
 		m_mapParameterSet[m].positionVBO = vbuf;
 		if(v->isSelectedView())
@@ -962,13 +997,14 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
 		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->getAttribute<float, VERTEX>("VisibilityConfidence");
+		VertexAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, PFP2::MAP> correspondingPointsAttribute
+				= mh_generated->addAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, VERTEX>("CorrespondingPoints");
 		const int width = m_fbo->getWidth(), height = m_fbo->getHeight();
 
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> currentDepthImage;
 		currentDepthImage.setOnes(width, height);
 		Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> labelValues;
 		labelValues.setZero(width, height);
-
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> maxConfidenceValues;
 		maxConfidenceValues.setZero(width, height);
 
@@ -989,13 +1025,25 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		const float n = fabs(camera->zNear()), f = fabs(camera->zFar());
 		const float threshold = 1/70.f;
 
-		CGoGNout << n << " | " << f << CGoGNendl;
+		std::vector<std::vector<Dart>> correspondingPoints;
+		correspondingPoints.resize(width*height);
+
+		std::vector<Dart> tmp_vector;
+		tmp_vector.resize(11);
+
+		for(int i = 0; i < width; ++i)
+		{
+			for(int j = 0; j < width; ++j)
+			{
+				correspondingPoints[i+j*width] = tmp_vector;
+			}
+		}
 
 		for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
 		{
-			if(it.key().compare(mh_generated->getName()) != 0)
+			if(it.value() != mhg_generated)
 			{
-				MapHandler<PFP2>* mh_current = static_cast<MapHandler<PFP2>*>(mapParams.projectedMapSet[it.key()]);
+				MapHandler<PFP2>* mh_current = static_cast<MapHandler<PFP2>*>(it.value());
 
 				m_shaderScalarFieldReal->setAttributePosition(mh_current->getVBO("position"));
 				m_shaderScalarFieldReal->setAttributeScalar(mh_current->getVBO("Label"));
@@ -1032,6 +1080,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 							Dart d = Dart::create(labelValues(i, j));
 							if(d.label() < 4000000000)
 							{
+								correspondingPoints[i+j*width][0] = d;
 								maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), visibilityConfidenceCurrent[d]);
 							}
 						}
@@ -1047,10 +1096,22 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
+			correspondingPointsAttribute[d].reserve(11);
+			for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
+			{
+				if(it.value() != mhg_generated)
+				{
+					PointCorrespondance tmp;
+					tmp.map = it.value();
+					tmp.vertex = correspondingPoints[x+y*width][0];
+					correspondingPointsAttribute[d].push_back(tmp);
+				}
+			}
 			if(visibilityConfidence[d] < maxConfidenceValues(x, y))
 			{
 				//Suppression du point dans la carte de profondeur
-				depthImage(x, y) = 1.f;
+//				correspondingPointsAttribute[d] = correspondingPoints[x+y*width];
+//				depthImage(x, y) = 1.f;
 			}
 		}
 
