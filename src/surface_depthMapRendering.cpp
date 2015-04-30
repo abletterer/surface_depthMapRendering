@@ -162,16 +162,40 @@ void Surface_DepthMapRendering_Plugin::selectedCellsChanged(CellSelectorGen* cs)
 		}
 
 		CellSelector<PFP2::MAP, VERTEX>* vertexSelector = static_cast<CellSelector<PFP2::MAP, VERTEX>*>(cs);
-		Vertex selected_point = vertexSelector->getSelectedCells()[0];
-
-		std::vector<PointCorrespondance>& correspondingPoints = correspondingPointsAttribute[selected_point];
-		for(std::vector<PointCorrespondance>::const_iterator it = correspondingPoints.begin(); it!=correspondingPoints.end(); ++it)
+		if(vertexSelector->getNbSelectedCells() == 0)
 		{
-			PointCorrespondance tmp = *it;
-			MapHandler<PFP2>* mh_current = static_cast<MapHandler<PFP2>*>(tmp.map);
+			//Démarquage de tous les sommets de toutes les cartes
+			MapParameters& mapParams = m_mapParameterSet[m_main_object];
+			for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
+			{
+				if(it.value() != mh_map)
+				{
+					MapHandler<PFP2>* mh_current = static_cast<MapHandler<PFP2>*>(it.value());
+					CellSelector<PFP2::MAP, VERTEX>* cur_selector = mh_current->getCellSelector<VERTEX>("selector");
+					if(cur_selector->getNbSelectedCells() > 0)
+					{
+						cur_selector->unselect(cur_selector->getSelectedCells());
+					}
+				}
+			}
+		}
+		else
+		{
+			Vertex selected_point = vertexSelector->getSelectedCells()[0];
 
-			CellSelector<PFP2::MAP, VERTEX>* vertexSelector = mh_current->getCellSelector<VERTEX>("selector");
-			vertexSelector->select(tmp.vertex, false);
+			std::vector<PointCorrespondance>& correspondingPoints = correspondingPointsAttribute[selected_point];
+			for(std::vector<PointCorrespondance>::const_iterator it = correspondingPoints.begin(); it!=correspondingPoints.end(); ++it)
+			{
+				PointCorrespondance tmp = *it;
+				MapHandler<PFP2>* mh_current = static_cast<MapHandler<PFP2>*>(tmp.map);
+
+				CellSelector<PFP2::MAP, VERTEX>* cur_selector = mh_current->getCellSelector<VERTEX>("selector");
+				if(cur_selector->getNbSelectedCells() > 0)
+				{
+					cur_selector->unselect(cur_selector->getSelectedCells());
+				}
+				cur_selector->select(tmp.vertex, false);
+			}
 		}
 
 		m_schnapps->getSelectedView()->updateGL();
@@ -1022,7 +1046,6 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		 * z_w = (f*(p+n))/(p*(f-n)) => Fonction inverse qui pour une distance d'un point à la caméra, donne sa valeur de profondeur
 		 */
 
-		const float n = fabs(camera->zNear()), f = fabs(camera->zFar());
 		const float threshold = 1/70.f;
 
 		std::vector<std::vector<Dart>> correspondingPoints;
@@ -1038,6 +1061,9 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 				correspondingPoints[i+j*width] = tmp_vector;
 			}
 		}
+
+		std::vector<MapHandlerGen*> vec_maps;
+		vec_maps.reserve(11);
 
 		for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
 		{
@@ -1075,17 +1101,19 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 				{
 					for(int j = 0; j < currentDepthImage.cols(); ++j)
 					{
+						correspondingPoints[i+j*width][vec_maps.size()] = Dart::nil();
 						if(fabs(1-depthImage(i, j)) > FLT_EPSILON && currentDepthImage(i, j) < threshold)
 						{
 							Dart d = Dart::create(labelValues(i, j));
 							if(d.label() < 4000000000)
 							{
-								correspondingPoints[i+j*width][0] = d;
+								correspondingPoints[i+j*width][vec_maps.size()] = d;
 								maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), visibilityConfidenceCurrent[d]);
 							}
 						}
 					}
 				}
+				vec_maps.push_back(it.value());
 			}
 		}
 
@@ -1097,21 +1125,20 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
 			correspondingPointsAttribute[d].reserve(11);
-			for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
+			for(unsigned int i = 0; i < vec_maps.size(); ++i)
 			{
-				if(it.value() != mhg_generated)
+				if(vec_maps[i] != mhg_generated && correspondingPoints[x+y*width][i] != Dart::nil())
 				{
 					PointCorrespondance tmp;
-					tmp.map = it.value();
-					tmp.vertex = correspondingPoints[x+y*width][0];
+					tmp.map = vec_maps[i];
+					tmp.vertex = correspondingPoints[x+y*width][i];
 					correspondingPointsAttribute[d].push_back(tmp);
 				}
 			}
 			if(visibilityConfidence[d] < maxConfidenceValues(x, y))
 			{
 				//Suppression du point dans la carte de profondeur
-//				correspondingPointsAttribute[d] = correspondingPoints[x+y*width];
-//				depthImage(x, y) = 1.f;
+				depthImage(x, y) = 1.f;
 			}
 		}
 
