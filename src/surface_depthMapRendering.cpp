@@ -1048,19 +1048,11 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 		const float threshold = 1/70.f;
 
-		std::vector<std::vector<Dart>> correspondingPoints;
-		correspondingPoints.resize(width*height);
-
 		std::vector<Dart> tmp_vector;
 		tmp_vector.resize(11);
 
-		for(int i = 0; i < width; ++i)
-		{
-			for(int j = 0; j < width; ++j)
-			{
-				correspondingPoints[i+j*width] = tmp_vector;
-			}
-		}
+		std::vector<std::vector<Dart>> correspondingPoints;
+		correspondingPoints.resize(width*height, tmp_vector);
 
 		std::vector<MapHandlerGen*> vec_maps;
 		vec_maps.reserve(11);
@@ -1096,18 +1088,20 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 				currentDepthImage = (depthImage.array()-currentDepthImage.array()).abs();
 
+				unsigned int size = vec_maps.size();
+
 				#pragma omp parallel for
 				for(int i = 0; i < currentDepthImage.rows(); ++i)
 				{
 					for(int j = 0; j < currentDepthImage.cols(); ++j)
 					{
-						correspondingPoints[i+j*width][vec_maps.size()] = Dart::nil();
+						correspondingPoints[i+j*width][size] = Dart::nil();
 						if(fabs(1-depthImage(i, j)) > FLT_EPSILON && currentDepthImage(i, j) < threshold)
 						{
 							Dart d = Dart::create(labelValues(i, j));
 							if(d.label() < 4000000000)
-							{
-								correspondingPoints[i+j*width][vec_maps.size()] = d;
+							{	//Dummy test to avoid problems
+								correspondingPoints[i+j*width][size] = d;
 								maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), visibilityConfidenceCurrent[d]);
 							}
 						}
