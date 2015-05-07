@@ -101,8 +101,8 @@ public slots: //Python calls
 	void createCameras(const QString& mapName, int nbMax = 12);
 	void render(const QString& mapName);
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
-	void lowerResolution(const QString& mapOrigin, const QString& mapGenerated);
-	void upperResolution(const QString& mapOrigin, const QString& mapGenerated);
+	bool lowerResolution(const QString& mapOrigin, const QString& mapGenerated);
+	bool upperResolution(const QString& mapOrigin, const QString& mapGenerated);
 
 	/*
 	 * Export de données

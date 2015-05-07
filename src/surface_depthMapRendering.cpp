@@ -453,7 +453,7 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 	}
 }
 
-void Surface_DepthMapRendering_Plugin::lowerResolution(const QString& mapOrigin, const QString& mapGenerated)
+bool Surface_DepthMapRendering_Plugin::lowerResolution(const QString& mapOrigin, const QString& mapGenerated)
 {
 	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
 	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
@@ -491,7 +491,7 @@ void Surface_DepthMapRendering_Plugin::lowerResolution(const QString& mapOrigin,
 					float pair_2 = pixels_tmp(i+1, j);
 
 					impair -= (pair_1+pair_2)/2.f;
-					pixels(width+i/2, j) = impair;
+					pixels(width+i/2, j) = impair/2.f;
 				}
 			}
 
@@ -499,7 +499,7 @@ void Surface_DepthMapRendering_Plugin::lowerResolution(const QString& mapOrigin,
 			#pragma omp parallel for
 			for(int j = 0; j < height2; ++j)
 			{
-				pixels(width2-1, j) -= pixels_tmp(width2-2, j);
+				pixels(width2-1, j) = (pixels(width2-1, j)-pixels_tmp(width2-2, j))/2.f;
 			}
 
 			pixels_tmp = Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>(pixels);
@@ -518,21 +518,23 @@ void Surface_DepthMapRendering_Plugin::lowerResolution(const QString& mapOrigin,
 					float pair_2 = pixels_tmp(i, j+1);
 
 					impair -= (pair_1+pair_2)/2.f;
-					pixels(i, height+j/2) = impair;
+					pixels(i, height+j/2) = impair/2.f;
 				}
 
 				//Traitement spécifique pour la dernière ligne (différence avec le pair situé au dessus)
-				pixels(i, height2-1) -= pixels_tmp(i, height2-2);
+				pixels(i, height2-1) = (pixels(i, height2-1)-pixels_tmp(i, height2-2))/2.f;
 			}
 
 			regenerateMap(mapOrigin, mapGenerated);
-
 			project2DImageTo3DSpace(mapOrigin, mapGenerated);
+
+			return true;
 		}
 	}
+	return false;
 }
 
-void Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin, const QString& mapGenerated)
+bool Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin, const QString& mapGenerated)
 {
 	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
 	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
@@ -567,7 +569,7 @@ void Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin,
 
 				for(int i = 1, i_2 = 0; i < width-1; i += 2, ++i_2)
 				{
-					float impair = pixels_tmp(width/2+i_2, j);
+					float impair = pixels_tmp(width/2+i_2, j)*2;
 					float pair_1 = pixels_tmp(i_2, j);
 					float pair_2 = pixels_tmp(i_2+1, j);
 
@@ -580,7 +582,7 @@ void Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin,
 			#pragma omp parallel for
 			for(int j = 0; j < height; ++j)
 			{
-				pixels(width-1, j) += pixels_tmp((width-1)/2, j);
+				pixels(width-1, j) = pixels(width-1, j)*2+pixels_tmp((width-1)/2, j);
 			}
 
 			pixels_tmp = Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>(pixels);
@@ -594,7 +596,7 @@ void Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin,
 				}
 				for(int j = 1, j_2 = 0; j < height-1; j += 2, ++j_2)
 				{
-					float impair = pixels_tmp(i, width/2+j_2);
+					float impair = pixels_tmp(i, width/2+j_2)*2;
 					float pair_1 = pixels_tmp(i, j_2);
 					float pair_2 = pixels_tmp(i, j_2+1);
 
@@ -603,14 +605,16 @@ void Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin,
 				}
 
 				//Traitement spécifique pour la dernière ligne (différence avec le pair situé au dessus)
-				pixels(i, height-1) += pixels_tmp(i, (height-1)/2);
+				pixels(i, height-1) = pixels(i, height-1)*2+pixels_tmp(i, (height-1)/2);
 			}
 
 			regenerateMap(mapOrigin, mapGenerated);
-
 			project2DImageTo3DSpace(mapOrigin, mapGenerated);
+
+			return true;
 		}
 	}
+	return false;
 }
 
 bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory)
