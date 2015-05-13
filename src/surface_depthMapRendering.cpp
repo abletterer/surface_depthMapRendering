@@ -29,6 +29,7 @@ bool Surface_DepthMapRendering_Plugin::enable()
 
 	connect(m_depthMapRenderingDialog->button_lower_resolution, SIGNAL(clicked()), this, SLOT(lowerResolutionFromDialog()));
 	connect(m_depthMapRenderingDialog->button_upper_resolution, SIGNAL(clicked()), this, SLOT(upperResolutionFromDialog()));
+	connect(m_depthMapRenderingDialog->button_saveMergedPointCloud, SIGNAL(clicked()), this, SLOT(saveMergedPointCloudFromDialog()));
 
 	connect(m_schnapps, SIGNAL(mapAdded(MapHandlerGen*)), this, SLOT(mapAdded(MapHandlerGen*)));
 	connect(m_schnapps, SIGNAL(mapRemoved(MapHandlerGen*)), this, SLOT(mapRemoved(MapHandlerGen*)));
@@ -58,6 +59,7 @@ void Surface_DepthMapRendering_Plugin::disable()
 
 	disconnect(m_depthMapRenderingDialog->button_lower_resolution, SIGNAL(clicked()), this, SLOT(lowerResolutionFromDialog()));
 	disconnect(m_depthMapRenderingDialog->button_upper_resolution, SIGNAL(clicked()), this, SLOT(upperResolutionFromDialog()));
+	disconnect(m_depthMapRenderingDialog->button_saveMergedPointCloud, SIGNAL(clicked()), this, SLOT(saveMergedPointCloudFromDialog()));
 
 	disconnect(m_schnapps, SIGNAL(mapAdded(MapHandlerGen*)), this, SLOT(mapAdded(MapHandlerGen*)));
 	disconnect(m_schnapps, SIGNAL(mapRemoved(MapHandlerGen*)), this, SLOT(mapRemoved(MapHandlerGen*)));
@@ -117,6 +119,22 @@ void Surface_DepthMapRendering_Plugin::upperResolutionFromDialog()
 		else
 		{
 			CGoGNout << "Nothing to do for this map" << CGoGNendl;
+		}
+	}
+}
+
+void Surface_DepthMapRendering_Plugin::saveMergedPointCloudFromDialog()
+{
+	QList<QListWidgetItem*> currentItems = m_depthMapRenderingDialog->list_maps->selectedItems();
+	if(!currentItems.empty())
+	{
+		QString mapName = currentItems[0]->text();
+		MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
+		if(mhg_map && m_mapParameterSet.contains(mhg_map))
+		{
+			MapParameters& mapParams = m_mapParameterSet[mhg_map];
+			QStringList mapNames = mapParams.depthCameraSet.keys();
+			saveMergedPointCloud(mapName, mapNames);
 		}
 	}
 }
@@ -804,52 +822,60 @@ bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOr
 {
 	if(!mapOrigin.isEmpty() && !mapNames.empty() && !directory.isEmpty())
 	{
-		std::vector<PFP2::MAP*> maps;
-		maps.reserve(mapNames.size());
-		std::vector<std::vector<VertexAttribute<PFP2::VEC3, PFP2::MAP>>> attributes;
-		for(int i = 0; i < mapNames.size(); ++i)
+		MapHandlerGen* mh_origin = m_schnapps->getMap(mapOrigin);
+		if(m_mapParameterSet.contains(mh_origin))
 		{
-			MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(m_schnapps->getMap(mapNames[i]));
-			if(mh_map)
-			{
-				std::vector<VertexAttribute<PFP2::VEC3, PFP2::MAP>> attribs;
-				PFP2::MAP* map = mh_map->getMap();
-				maps.push_back(map);
+			MapParameters& mapParams = m_mapParameterSet[mh_origin];
 
-				VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_map->getAttribute<PFP2::VEC3, VERTEX>("position");
-				VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_map->getAttribute<PFP2::VEC3, VERTEX>("normal");
-				attribs.push_back(position);
-				attribs.push_back(normal);
-				attributes.push_back(attribs);
+			int level = *mapParams.decompositionLevelSet.begin();
+
+			std::vector<PFP2::MAP*> maps;
+			maps.reserve(mapNames.size());
+			std::vector<std::vector<VertexAttribute<PFP2::VEC3, PFP2::MAP>>> attributes;
+			for(int i = 0; i < mapNames.size(); ++i)
+			{
+				MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(m_schnapps->getMap(mapNames[i]));
+				if(mh_map)
+				{
+					std::vector<VertexAttribute<PFP2::VEC3, PFP2::MAP>> attribs;
+					PFP2::MAP* map = mh_map->getMap();
+					maps.push_back(map);
+
+					VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_map->getAttribute<PFP2::VEC3, VERTEX>("position");
+					VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_map->getAttribute<PFP2::VEC3, VERTEX>("normal");
+					attribs.push_back(position);
+					attribs.push_back(normal);
+					attributes.push_back(attribs);
+				}
+				else
+				{
+					return false;
+				}
+			}
+
+			int width = m_fbo->getWidth(), height = m_fbo->getHeight();
+
+			QString filename(directory);
+			filename += "/" + mapOrigin + "/";
+			mkdir(filename.toStdString().c_str(), 0777);
+
+			filename += "PointClouds/";
+			mkdir(filename.toStdString().c_str(), 0777);
+
+			filename += QString::number(width) + "x" + QString::number(height) + "/";
+			mkdir(filename.toStdString().c_str(), 0777);
+
+			if(m_correspondance_done)
+			{
+				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-Without-" + QString::number(level) + ".ply";
 			}
 			else
 			{
-				return false;
+				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-With-" + QString::number(level) + ".ply";
 			}
+
+			return Algo::Surface::Export::exportPLYVertMaps<PFP2>(maps, attributes, filename.toStdString().c_str(), false);
 		}
-
-		int width = m_fbo->getWidth(), height = m_fbo->getHeight();
-
-		QString filename(directory);
-		filename += "/" + mapOrigin + "/";
-		mkdir(filename.toStdString().c_str(), 0777);
-
-		filename += "PointClouds/";
-		mkdir(filename.toStdString().c_str(), 0777);
-
-		filename += QString::number(width) + "x" + QString::number(height) + "/";
-		mkdir(filename.toStdString().c_str(), 0777);
-
-		if(m_correspondance_done)
-		{
-			filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-Without.ply";
-		}
-		else
-		{
-			filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-With.ply";
-		}
-
-		return Algo::Surface::Export::exportPLYVertMaps<PFP2>(maps, attributes, filename.toStdString().c_str(), false);
 	}
 
 	return false;
@@ -944,11 +970,11 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 		MapParameters& mapParams = m_mapParameterSet[mh_origin];
 		Camera* camera = mapParams.depthCameraSet[mapGenerated];
 
+		qglviewer::Vec vd = -(camera->viewDirection());
+		PFP2::VEC3 view_direction(vd.x, vd.y, vd.z);
+
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& depthImage = mapParams.depthImageSet[mapGenerated];
 
-		PFP2::VEC3 position_camera(camera->position().x, camera->position().y, camera->position().z);
-
-		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("normal");
 		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->addAttribute<float, VERTEX>("VisibilityConfidence");
@@ -976,12 +1002,12 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
 			float color = depthImage(x, y);
-			if(fabs(1-color) > FLT_EPSILON && gradientMagnitude(x, y) < mean)
+			if(fabs(1-color) > FLT_EPSILON && gradientMagnitude(x, y) < mean+mean/2.f)
 			{
-				PFP2::VEC3 u = (position_camera-position[d]).normalized();
-				visibilityConfidence[d] = u*normal[d];
+//				PFP2::VEC3 u = (position_camera-position[d]).normalized();
+				visibilityConfidence[d] = view_direction*normal[d];
 				if(visibilityConfidence[d] != visibilityConfidence[d])
-				{	//visibilityConfidence[d]==NaN
+				{	//visibilityConfidence[d] is NaN
 					visibilityConfidence[d] = 0.f;
 				}
 			}
@@ -1050,16 +1076,16 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		 * z_w = (f*(p+n))/(p*(f-n)) => Fonction inverse qui pour une distance d'un point à la caméra, donne sa valeur de profondeur
 		 */
 
-		const float threshold = 1/70.f;
+		const float threshold = 1/64.f;
 
-		std::vector<Dart> tmp_vector;
-		tmp_vector.resize(11);
+//		std::vector<Dart> tmp_vector;
+//		tmp_vector.resize(11);
 
-		std::vector<std::vector<Dart>> correspondingPoints;
-		correspondingPoints.resize(width*height, tmp_vector);
+//		std::vector<std::vector<Dart>> correspondingPoints;
+//		correspondingPoints.resize(width*height, tmp_vector);
 
-		std::vector<MapHandlerGen*> vec_maps;
-		vec_maps.reserve(11);
+//		std::vector<MapHandlerGen*> vec_maps;
+//		vec_maps.reserve(11);
 
 		for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
 		{
@@ -1092,26 +1118,26 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 				currentDepthImage = (depthImage.array()-currentDepthImage.array()).abs();
 
-				unsigned int size = vec_maps.size();
+//				unsigned int size = vec_maps.size();
 
 				#pragma omp parallel for
 				for(int i = 0; i < currentDepthImage.rows(); ++i)
 				{
 					for(int j = 0; j < currentDepthImage.cols(); ++j)
 					{
-						correspondingPoints[i+j*width][size] = Dart::nil();
+//						correspondingPoints[i+j*width][size] = Dart::nil();
 						if(fabs(1-depthImage(i, j)) > FLT_EPSILON && currentDepthImage(i, j) < threshold)
 						{
 							Dart d = Dart::create(labelValues(i, j));
 							if(d.label() < 4000000000)
 							{	//Dummy test to avoid problems
-								correspondingPoints[i+j*width][size] = d;
+//								correspondingPoints[i+j*width][size] = d;
 								maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), visibilityConfidenceCurrent[d]);
 							}
 						}
 					}
 				}
-				vec_maps.push_back(it.value());
+//				vec_maps.push_back(it.value());
 			}
 		}
 
@@ -1122,17 +1148,17 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
-			correspondingPointsAttribute[d].reserve(11);
-			for(unsigned int i = 0; i < vec_maps.size(); ++i)
-			{
-				if(vec_maps[i] != mhg_generated && correspondingPoints[x+y*width][i] != Dart::nil())
-				{
-					PointCorrespondance tmp;
-					tmp.map = vec_maps[i];
-					tmp.vertex = correspondingPoints[x+y*width][i];
-					correspondingPointsAttribute[d].push_back(tmp);
-				}
-			}
+//			correspondingPointsAttribute[d].reserve(11);
+//			for(unsigned int i = 0; i < vec_maps.size(); ++i)
+//			{
+//				if(vec_maps[i] != mhg_generated && correspondingPoints[x+y*width][i] != Dart::nil())
+//				{
+//					PointCorrespondance tmp;
+//					tmp.map = vec_maps[i];
+//					tmp.vertex = correspondingPoints[x+y*width][i];
+//					correspondingPointsAttribute[d].push_back(tmp);
+//				}
+//			}
 			if(visibilityConfidence[d] < maxConfidenceValues(x, y))
 			{
 				//Suppression du point dans la carte de profondeur

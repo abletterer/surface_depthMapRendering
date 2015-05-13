@@ -83,6 +83,7 @@ private slots:
 	void closeDepthMapRenderingDialog();
 	void lowerResolutionFromDialog();
 	void upperResolutionFromDialog();
+	void saveMergedPointCloudFromDialog();
 
 	//SCHNApps signals
 	void mapAdded(MapHandlerGen* map);
