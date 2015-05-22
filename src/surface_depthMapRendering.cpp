@@ -867,11 +867,11 @@ bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOr
 
 			if(m_correspondance_done)
 			{
-				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-Without-" + QString::number(level) + ".ply";
+				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-Without.ply";
 			}
 			else
 			{
-				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-With-" + QString::number(level) + ".ply";
+				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-With.ply";
 			}
 
 			return Algo::Surface::Export::exportPLYVertMaps<PFP2>(maps, attributes, filename.toStdString().c_str(), false);
@@ -1002,7 +1002,7 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
 			float color = depthImage(x, y);
-			if(fabs(1-color) > FLT_EPSILON && gradientMagnitude(x, y) < mean+mean/2.f)
+			if(fabs(1-color) > FLT_EPSILON/* && gradientMagnitude(x, y) < mean+mean/2.f*/)
 			{
 //				PFP2::VEC3 u = (position_camera-position[d]).normalized();
 				visibilityConfidence[d] = view_direction*normal[d];
@@ -1051,8 +1051,8 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
 		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->getAttribute<float, VERTEX>("VisibilityConfidence");
-		VertexAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, PFP2::MAP> correspondingPointsAttribute
-				= mh_generated->addAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, VERTEX>("CorrespondingPoints");
+//		VertexAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, PFP2::MAP> correspondingPointsAttribute
+//				= mh_generated->addAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, VERTEX>("CorrespondingPoints");
 		const int width = m_fbo->getWidth(), height = m_fbo->getHeight();
 
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> currentDepthImage;
@@ -1114,9 +1114,29 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 				glDisable(GL_TEXTURE_2D);
 				m_fbo->unbind();
 
+//				Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> copyImage(currentDepthImage);
+
 				currentDepthImage = currentDepthImage.array()*2-1;    //Set range to [-1;1]
 
 				currentDepthImage = (depthImage.array()-currentDepthImage.array()).abs();
+
+//				QImage image(currentDepthImage.rows(), currentDepthImage.cols(), QImage::Format_RGB32);
+//				for(int i = 0; i < currentDepthImage.rows(); ++i)
+//				{
+//					for(int j = 0; j < currentDepthImage.cols(); ++j)
+//					{
+//						if(currentDepthImage(i, j) < threshold)
+//						{
+//							image.setPixel(i, currentDepthImage.rows()-j-1, qRgb((1-copyImage(i,j))*255, (1-copyImage(i,j))*255, (1-copyImage(i,j))*255));
+//						}
+//						else
+//						{
+//							image.setPixel(i, currentDepthImage.rows()-j-1, qRgb(0, 0, 0));
+//						}
+//					}
+//				}
+
+//				image.save("/home/blettere/Projets/Test/Images/"+mapGenerated+"-"+mh_current->getName()+".png");
 
 //				unsigned int size = vec_maps.size();
 
@@ -1145,26 +1165,26 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
 
-		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
-		{
-			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
-//			correspondingPointsAttribute[d].reserve(11);
-//			for(unsigned int i = 0; i < vec_maps.size(); ++i)
+//		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
+//		{
+//			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
+////			correspondingPointsAttribute[d].reserve(11);
+////			for(unsigned int i = 0; i < vec_maps.size(); ++i)
+////			{
+////				if(vec_maps[i] != mhg_generated && correspondingPoints[x+y*width][i] != Dart::nil())
+////				{
+////					PointCorrespondance tmp;
+////					tmp.map = vec_maps[i];
+////					tmp.vertex = correspondingPoints[x+y*width][i];
+////					correspondingPointsAttribute[d].push_back(tmp);
+////				}
+////			}
+//			if(visibilityConfidence[d] < maxConfidenceValues(x, y))
 //			{
-//				if(vec_maps[i] != mhg_generated && correspondingPoints[x+y*width][i] != Dart::nil())
-//				{
-//					PointCorrespondance tmp;
-//					tmp.map = vec_maps[i];
-//					tmp.vertex = correspondingPoints[x+y*width][i];
-//					correspondingPointsAttribute[d].push_back(tmp);
-//				}
+//				//Suppression du point dans la carte de profondeur
+//				depthImage(x, y) = 1.f;
 //			}
-			if(visibilityConfidence[d] < maxConfidenceValues(x, y))
-			{
-				//Suppression du point dans la carte de profondeur
-				depthImage(x, y) = 1.f;
-			}
-		}
+//		}
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
 
