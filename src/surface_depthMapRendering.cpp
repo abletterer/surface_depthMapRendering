@@ -1010,13 +1010,14 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 				{	//visibilityConfidence[d] is NaN
 					visibilityConfidence[d] = 0.f;
 				}
+				label[d] = d.label();
 			}
 			else
 			{
 				//Suppression du point de la carte de profondeur
 				depthImage(x, y) = 1.f;
+				label[d] = 0;
 			}
-			label[d] = d.label();
 		}
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
@@ -1025,6 +1026,72 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 
 		mh_generated->notifyAttributeModification(visibilityConfidence, false);
 		mh_generated->notifyAttributeModification(label, false);
+	}
+}
+
+void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigin, const QString& mapGenerated)
+{
+	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
+	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
+
+	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
+	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
+
+	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
+	{
+		CGoGNout << "Estimation de la densité des points de la carte " << mapGenerated.toStdString() << " .." << CGoGNflush;
+		Utils::Chrono chrono;
+		chrono.start();
+
+		MapParameters& mapParams = m_mapParameterSet[mh_origin];
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& depthImage = mapParams.depthImageSet[mapGenerated];
+
+		PFP2::MAP* generated_map = mh_generated->getMap();
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
+		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
+		VertexAttribute<float, PFP2::MAP> samplingDensity = mh_generated->getAttribute<float, VERTEX>("SamplingDensity");
+		if(!samplingDensity.isValid())
+		{
+			samplingDensity = mh_generated->addAttribute<float, VERTEX>("SamplingDensity");
+		}
+
+		Eigen::Matrix<Dart, Eigen::Dynamic, Eigen::Dynamic> imageDarts;
+		imageDarts.setZero(depthImage.rows(), depthImage.cols());
+
+		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
+		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
+		{
+			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
+			imageDarts(x, y) = d;
+		}
+
+		const int N_SIZE = 3;
+		const float RADIUS = mh_generated->getBBdiagSize()/100;
+		const float RADIUS2 = RADIUS*RADIUS;	 //Au carré pour simplifier les comparaisons avec la norme du vecteur
+
+		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
+		{
+			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
+			int count = 0;
+			//Parcours de l'ensemble des points appartenant au N_SIZE-voisinage pixellique du point courant d (y compris lui-même)
+			for(int i = x-N_SIZE; i < x+N_SIZE; ++i)
+			{
+				for(int j = y-N_SIZE; j < y+N_SIZE; ++j)
+				{
+					if(1.f - fabs(depthImage(i, j) < FLT_EPSILON))
+					{
+						if(fabs((position[d]-position[imageDarts(i, j)]).norm2()) < RADIUS2)	//Comparaison avec la norme du vecteur au carré (plus rapide)
+						{
+							//Si le point est contenu dans la sphere de rayon RADIUS
+							++count;
+						}
+					}
+				}
+			}
+			samplingDensity[d] = count/RADIUS;
+		}
+
+		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
 	}
 }
 
@@ -1050,7 +1117,8 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		PFP2::MAP* generated_map = mh_generated->getMap();
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
 		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
-		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->getAttribute<float, VERTEX>("VisibilityConfidence");
+//		VertexAttribute<float, PFP2::MAP> visibilityConfidence = mh_generated->getAttribute<float, VERTEX>("VisibilityConfidence");
+		VertexAttribute<float, PFP2::MAP> samplingDensity = mh_generated->getAttribute<float, VERTEX>("SamplingDensity");
 //		VertexAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, PFP2::MAP> correspondingPointsAttribute
 //				= mh_generated->addAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, VERTEX>("CorrespondingPoints");
 		const int width = m_fbo->getWidth(), height = m_fbo->getHeight();
@@ -1096,7 +1164,8 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 				m_shaderScalarFieldReal->setAttributePosition(mh_current->getVBO("position"));
 				m_shaderScalarFieldReal->setAttributeScalar(mh_current->getVBO("Label"));
 
-				VertexAttribute<float, PFP2::MAP> visibilityConfidenceCurrent = mh_current->getAttribute<float, VERTEX>("VisibilityConfidence");
+//				VertexAttribute<float, PFP2::MAP> visibilityConfidenceCurrent = mh_current->getAttribute<float, VERTEX>("VisibilityConfidence");
+				VertexAttribute<float, PFP2::MAP> samplingDensityCurrent = mh_current->getAttribute<float, VERTEX>("SamplingDensity");
 
 				m_fbo->bind();
 				glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
@@ -1152,7 +1221,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 							if(d.label() < 4000000000)
 							{	//Dummy test to avoid problems
 //								correspondingPoints[i+j*width][size] = d;
-								maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), visibilityConfidenceCurrent[d]);
+								maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), samplingDensityCurrent[d]);
 							}
 						}
 					}
@@ -1165,26 +1234,26 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
 
-//		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
-//		{
-//			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
-////			correspondingPointsAttribute[d].reserve(11);
-////			for(unsigned int i = 0; i < vec_maps.size(); ++i)
-////			{
-////				if(vec_maps[i] != mhg_generated && correspondingPoints[x+y*width][i] != Dart::nil())
-////				{
-////					PointCorrespondance tmp;
-////					tmp.map = vec_maps[i];
-////					tmp.vertex = correspondingPoints[x+y*width][i];
-////					correspondingPointsAttribute[d].push_back(tmp);
-////				}
-////			}
-//			if(visibilityConfidence[d] < maxConfidenceValues(x, y))
+		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
+		{
+			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
+//			correspondingPointsAttribute[d].reserve(11);
+//			for(unsigned int i = 0; i < vec_maps.size(); ++i)
 //			{
-//				//Suppression du point dans la carte de profondeur
-//				depthImage(x, y) = 1.f;
+//				if(vec_maps[i] != mhg_generated && correspondingPoints[x+y*width][i] != Dart::nil())
+//				{
+//					PointCorrespondance tmp;
+//					tmp.map = vec_maps[i];
+//					tmp.vertex = correspondingPoints[x+y*width][i];
+//					correspondingPointsAttribute[d].push_back(tmp);
+//				}
 //			}
-//		}
+			if(samplingDensity[d] < maxConfidenceValues(x, y))
+			{
+				//Suppression du point dans la carte de profondeur
+				depthImage(x, y) = 1.f;
+			}
+		}
 
 		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
 
@@ -1192,7 +1261,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 		mh_generated->notifyConnectivityModification(false);
 		mh_generated->notifyAttributeModification(position, false);
-		mh_generated->notifyAttributeModification(visibilityConfidence, false);
+		mh_generated->notifyAttributeModification(samplingDensity, false);
 		mh_generated->notifyAttributeModification(imageCoordinates, false);
 
 		m_correspondance_done = true;
