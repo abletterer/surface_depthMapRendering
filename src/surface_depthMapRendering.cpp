@@ -635,7 +635,7 @@ bool Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin,
 	return false;
 }
 
-bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory)
+bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory, const int criteria)
 {
 	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
 	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
@@ -661,13 +661,27 @@ bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin, 
 		filename += QString::number(m_fbo->getWidth()) + "x" + QString::number(m_fbo->getHeight()) + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
+		filename += mapGenerated;
+
 		if(m_correspondance_done)
 		{
-			filename += mapGenerated + "-Without.ply";
+			filename += "-Without";
+
+			switch(criteria)
+			{
+				case DENSITY:
+					filename += "-Density.ply";
+					break;
+				case VISIBILITY:
+					filename += "-Visibility.ply";
+					break;
+				default:
+					break;
+			}
 		}
 		else
 		{
-			filename += mapGenerated + "-With.ply";
+			filename += "-With.ply";
 		}
 
 		return Algo::Surface::Export::exportPLYVert<PFP2>(*generated_map, position, filename.toStdString().c_str(), false);
@@ -749,7 +763,7 @@ bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOr
 	return false;
 }
 
-bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory)
+bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory, const int criteria)
 {
 	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
 	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
@@ -784,10 +798,22 @@ bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOr
 		filename += QString::number(width) + "x" + QString::number(height) + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
-		filename += mapGenerated;
+		filename += mapGenerated + "-modifiedDepthMap";
+
+		switch(criteria)
+		{
+			case DENSITY:
+				filename += "-Density.dat";
+				break;
+			case VISIBILITY:
+				filename += "-Visibility.dat";
+				break;
+			default:
+				break;
+		}
 
 		std::ofstream out;
-		out.open(filename.toStdString() + "-modifiedDepthMap.dat", std::ios::out);
+		out.open(filename.toStdString(), std::ios::out);
 		if(!out.good())
 		{
 			CGoGNerr << "Unable to open file" << CGoGNendl;
@@ -818,7 +844,7 @@ bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOr
 	return false;
 }
 
-bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOrigin, const QStringList& mapNames, const QString& directory)
+bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOrigin, const QStringList& mapNames, const QString& directory, const int criteria)
 {
 	if(!mapOrigin.isEmpty() && !mapNames.empty() && !directory.isEmpty())
 	{
@@ -867,7 +893,19 @@ bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOr
 
 			if(m_correspondance_done)
 			{
-				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-Without.ply";
+				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-Without";
+
+				switch(criteria)
+				{
+					case DENSITY:
+						filename += "-Density.ply";
+						break;
+					case VISIBILITY:
+						filename += "-Visibility.ply";
+						break;
+					default:
+						break;
+				}
 			}
 			else
 			{
@@ -1255,7 +1293,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 					{
 						//Si un point s'est projeté sur ce pixel
 						Dart d = Dart::create(labelValues(i, j));
-						if(d != Dart::nil())
+						if(d != Dart::nil() && d.label() < 4000000000)
 						{
 							//Dummy test to avoid problems
 
