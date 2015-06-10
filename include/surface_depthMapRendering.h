@@ -49,6 +49,12 @@ struct PointCorrespondance
 	Dart vertex;
 };
 
+enum Criteria
+{
+	DENSITY = 0,
+	VISIBILITY = 1
+} ;
+
 class Surface_DepthMapRendering_Plugin : public PluginInteraction
 {
 	Q_OBJECT
@@ -120,7 +126,7 @@ public slots: //Python calls
 	void normalEstimation(const QString& mapOrigin, const QString& mapGenerated);
 	void confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated);
 	void densityEstimation(const QString& mapOrigin, const QString& mapGenerated);
-	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated);
+	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated, int criteria=DENSITY);
 
 	void regenerateMap(const QString& mapOrigin, const QString& mapGenerated);
 	void deleteBackground(const QString& mapOrigin, const QString& mapGenerated);
