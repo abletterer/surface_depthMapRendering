@@ -258,8 +258,8 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 		std::vector<qglviewer::Vec> positions;
 		positions.reserve(12);
 		positions.push_back(qglviewer::Vec(0,1,2));
-		positions.push_back(qglviewer::Vec(0,1,-2));
-		positions.push_back(qglviewer::Vec(0,-1,2));
+		positions.push_back(qglviewer::Vec(0,1,-2));	// Swap
+		positions.push_back(qglviewer::Vec(0,-1,2)); // Swap
 		positions.push_back(qglviewer::Vec(0,-1,-2));
 
 		positions.push_back(qglviewer::Vec(1,2,0));
@@ -359,34 +359,33 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 			MapHandlerGen* mhg_generated = m_schnapps->addMap(generatedName, 2);
 			mapParams.projectedMapSet[generatedName] = mhg_generated;
 
-			MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
-			PFP2::MAP* generated_map = mh_generated->getMap();
-
 			pixels.array() = pixels.array()*2-1;	//Put depth values in the range [-1;1]
 
 			mapParams.depthImageSet[generatedName] = pixels;
 			mapParams.decompositionLevelSet[generatedName] = 0;
 
-			VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
-			VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesGenerated = mh_generated->addAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
+//			MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
+//			PFP2::MAP* generated_map = mh_generated->getMap();
 
-			Algo::Surface::Tilings::Square::Grid<PFP2> grid(*generated_map, width-1, height-1);
-			grid.embedIntoGrid(planeCoordinatesGenerated, 2, 2);
+//			VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
+//			VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesGenerated = mh_generated->addAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 
-			std::vector<Dart>& vDarts = grid.getVertexDarts();
+//			Algo::Surface::Tilings::Square::Grid<PFP2> grid(*generated_map, width-1, height-1);
+//			grid.embedIntoGrid(planeCoordinatesGenerated, 2, 2);
 
-			#pragma omp parallel for
-			for(int i = 0; i < width; ++i)
-			{
-				for(int j = 0; j < height; ++j)
-				{
-					imageCoordinatesGenerated[vDarts[j*width+i]].setCoordinates(i, j);
-				}
-			}
+//			std::vector<Dart>& vDarts = grid.getVertexDarts();
 
-			mh_generated->notifyAttributeModification(planeCoordinatesGenerated, false);
-			mh_generated->notifyAttributeModification(imageCoordinatesGenerated, false);
-			project2DImageTo3DSpace(mapName, generatedName);
+//			for(int i = 0; i < width; ++i)
+//			{
+//				for(int j = 0; j < height; ++j)
+//				{
+//					imageCoordinatesGenerated[vDarts[j*width+i]].setCoordinates(i, j);
+//				}
+//			}
+
+//			mh_generated->notifyAttributeModification(planeCoordinatesGenerated, false);
+//			mh_generated->notifyAttributeModification(imageCoordinatesGenerated, false);
+//			project2DImageTo3DSpace(mapName, generatedName);
 		}
 
 		CGoGNout << "Temps d'échantillonnage : " << chrono.elapsed() << " ms " << CGoGNflush;
@@ -437,6 +436,10 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 
 		GLdouble mvp_matrix[16];
 		camera->getModelViewProjectionMatrix(mvp_matrix);
+
+		GLdouble p_matrix[16];
+
+		camera->getProjectionMatrix(p_matrix);
 
 		PFP2::MATRIX44 model_view_projection_matrix, model_view_projection_matrix_inv;
 
@@ -704,6 +707,8 @@ bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOr
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& pixels = mapParams.depthImageSet[mapGenerated];
 		Camera* camera = mapParams.depthCameraSet[mapGenerated];
 
+		int width = m_fbo->getWidth(), height = m_fbo->getHeight();
+
 		QString filename(directory);
 		filename += "/" + mapOrigin + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
@@ -711,7 +716,7 @@ bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOr
 		filename += "DepthMaps/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
-		filename += QString::number(m_fbo->getWidth()) + "x" + QString::number(m_fbo->getHeight()) + "/";
+		filename += QString::number(width) + "x" + QString::number(height) + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
 		filename += mapGenerated;
@@ -724,9 +729,9 @@ bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOr
 			return false;
 		}
 
-		for(int j = m_fbo->getHeight()-1; j >= 0; --j)
+		for(int j = height-1; j >= 0; --j)
 		{
-			for(unsigned int i = 0; i < m_fbo->getWidth(); ++i)
+			for(unsigned int i = 0; i < width; ++i)
 			{
 				out << pixels(i, j) << " " << std::flush;
 			}
@@ -750,7 +755,7 @@ bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOr
 		{
 			for(int j = 0; j < 4; ++j)
 			{
-				out << mvp_matrix[i+4*j] << " " << std::flush;
+				out << mvp_matrix[i*4+j] << " " << std::flush;
 			}
 			out << std::endl;
 		}
@@ -785,8 +790,6 @@ bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOr
 
 		MapParameters& mapParams = m_mapParameterSet[mh_origin];
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& pixels = mapParams.depthImageSet[mapGenerated];
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixelsLeft;
-		pixelsLeft.setOnes(width, height);
 
 		QString filename(directory);
 		filename += "/" + mapOrigin + "/";
@@ -820,18 +823,11 @@ bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOr
 			return false;
 		}
 
-		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
-		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
-		{
-			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
-			pixelsLeft(x, y) = pixels(x, y);
-		}
-
 		for(int j = height-1; j >= 0; --j)
 		{
 			for(int i = 0; i < width; ++i)
 			{
-				out << pixelsLeft(i, j) << " " << std::flush;
+				out << pixels(i, j) << " " << std::flush;
 			}
 			out << std::endl;
 		}
@@ -1040,7 +1036,7 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
 			float color = depthImage(x, y);
-			if(fabs(1-color) > FLT_EPSILON && gradientMagnitude(x, y) < mean+mean/2.f)
+			if(fabs(1-color) > FLT_EPSILON/* && gradientMagnitude(x, y) < mean+mean/2.f*/)
 			{
 //				PFP2::VEC3 u = (position_camera-position[d]).normalized();
 				visibilityConfidence[d] = view_direction*normal[d];
@@ -1265,6 +1261,26 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 				currentDepthImage = currentDepthImage.array()*2-1;    //Set range to [-1;1]
 
 				currentDepthImage = (depthImage.array()-currentDepthImage.array()).abs();
+
+//				int count = 0, count_0 = 0;
+
+//				for(int i = 0; i < currentDepthImage.rows(); ++i)
+//				{
+//					for(int j = 0; j < currentDepthImage.cols(); ++j)
+//					{
+
+//						if(fabs(1-depthImage(i, j)) < FLT_EPSILON)
+//						{
+//							++count_0;
+//						}
+//						else if(currentDepthImage(i, j) < threshold && fabs(1-depthImage(i, j)) > FLT_EPSILON)
+//						{
+//							++count;
+//						}
+//					}
+//				}
+
+//				CGoGNout << count << " point(s) similaire(s) sur " << depthImage.rows()*depthImage.cols()-count_0 << " point(s) au total.";
 
 //				QImage image(currentDepthImage.rows(), currentDepthImage.cols(), QImage::Format_RGB32);
 //				for(int i = 0; i < currentDepthImage.rows(); ++i)
