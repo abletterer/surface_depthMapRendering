@@ -928,7 +928,7 @@ bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOr
 
 			if(m_correspondance_done)
 			{
-				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-Without";
+				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-Without-Level-" + QString::number(level);
 
 				switch(criteria)
 				{
