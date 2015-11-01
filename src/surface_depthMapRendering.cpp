@@ -288,9 +288,9 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 			float radius = qAbs(camera_position.z - center.z);
 			radius += 1;	//To avoid problems when camera is placed at the center of the scene
 
-			camera_position.x = center.x + radius*positions[i].x;
-			camera_position.y = center.y + radius*positions[i].y;
-			camera_position.z = center.z + radius*positions[i].z;
+			camera_position.x = center.x + radius*positions[i].x*1000;
+			camera_position.y = center.y + radius*positions[i].y*1000;
+			camera_position.z = center.z + radius*positions[i].z*1000;
 
 			camera->setPosition(camera_position);
 
@@ -298,6 +298,9 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 
 			camera->setSceneBoundingBox(bb_min,bb_max);
 			camera->showEntireScene();
+
+
+			CGoGNout << "---------------------" << CGoGNendl;
 
 			QString generatedName(mapName);
 			generatedName += "-" + cameraName;
@@ -367,8 +370,10 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 			mapParams.depthImageSet[generatedName] = pixels;
 			mapParams.decompositionLevelSet[generatedName] = 0;
 
-			VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
-			VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesGenerated = mh_generated->addAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
+			VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated =
+					mh_generated->addAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
+			VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesGenerated =
+					mh_generated->addAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 
 			Algo::Surface::Tilings::Square::Grid<PFP2> grid(*generated_map, width-1, height-1);
 			grid.embedIntoGrid(planeCoordinatesGenerated, 2, 2);
@@ -635,7 +640,10 @@ bool Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin,
 	return false;
 }
 
-bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory, const int criteria)
+bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin,
+													  const QString& mapGenerated,
+													  const QString& directory,
+													  const int criteria)
 {
 	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
 	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
@@ -763,7 +771,10 @@ bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOr
 	return false;
 }
 
-bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory, const int criteria)
+bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOrigin,
+															const QString& mapGenerated,
+															const QString& directory,
+															const int criteria)
 {
 	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
 	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
@@ -844,7 +855,10 @@ bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOr
 	return false;
 }
 
-bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOrigin, const QStringList& mapNames, const QString& directory, const int criteria)
+bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOrigin,
+															const QStringList& mapNames,
+															const QString& directory,
+															const int criteria)
 {
 	if(!mapOrigin.isEmpty() && !mapNames.empty() && !directory.isEmpty())
 	{
