@@ -370,9 +370,9 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 			MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
 			PFP2::MAP* generated_map = mh_generated->getMap();
 
-			VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated = 
+			VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated =
 				mh_generated->addAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
-			VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesGenerated = 
+			VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinatesGenerated =
 				mh_generated->addAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
 
 			Algo::Surface::Tilings::Square::Grid<PFP2> grid(*generated_map, width-1, height-1);
@@ -1546,6 +1546,20 @@ void Surface_DepthMapRendering_Plugin::removeUselessAttributes(const QString &ma
 		generated_map->removeAttribute(normal);
 		generated_map->removeAttribute(visibilityConfidence);
 		generated_map->removeAttribute(label);
+	}
+}
+
+void Surface_DepthMapRendering_Plugin::verifyDepthMaps(const QString& mapOrigin, const QString& mapGenerated)
+{
+	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
+	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
+
+	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
+	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
+
+	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
+	{
+		//Iterate through camera set, verifying the alignment of the camera plane (viewing direction) with the current camera plane (viewing direction)
 	}
 }
 

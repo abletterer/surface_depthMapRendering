@@ -132,6 +132,8 @@ public slots: //Python calls
 	void deleteBackground(const QString& mapOrigin, const QString& mapGenerated);
 	void removeUselessAttributes(const QString& mapGenerated);
 
+	void verifyDepthMaps(const QString& mapOrigin, const QString& mapGenerated);
+
 private:
 	Dialog_Surface_DepthMapRendering* m_depthMapRenderingDialog;
 	QAction* m_depthMapRenderingAction;
