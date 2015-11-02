@@ -248,6 +248,9 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
 	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
 
+    mh_map->setBBVertexAttribute("position");
+    mh_map->updateBB();
+
 	if(mh_map && m_mapParameterSet.contains(mhg_map))
 	{
 		QString baseName("DepthCamera-");
@@ -270,10 +273,14 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 		positions.push_back(qglviewer::Vec(2,0,1));
 		positions.push_back(qglviewer::Vec(2,0,-1));
 		positions.push_back(qglviewer::Vec(-2,0,1));
-		positions.push_back(qglviewer::Vec(-2,0,-1));
+        positions.push_back(qglviewer::Vec(-2,0,-1));
 
-		qglviewer::Vec bb_min = mh_map->getBBmin();
-		qglviewer::Vec bb_max = mh_map->getBBmax();
+        qglviewer::Vec bb_min, bb_max;
+
+        mh_map->transformedBB(bb_min, bb_max);
+
+        CGoGNout << bb_min.x << " " << bb_min.y << " " << bb_min.z << CGoGNendl;
+        CGoGNout << bb_max.x << " " << bb_max.y << " " << bb_max.z << CGoGNendl;
 
 		qglviewer::Vec center = (bb_min+bb_max)/2.f;
 
@@ -288,19 +295,16 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 			float radius = qAbs(camera_position.z - center.z);
 			radius += 1;	//To avoid problems when camera is placed at the center of the scene
 
-			camera_position.x = center.x + radius*positions[i].x*1000;
-			camera_position.y = center.y + radius*positions[i].y*1000;
-			camera_position.z = center.z + radius*positions[i].z*1000;
+            camera_position.x = center.x + radius*positions[i].x;
+            camera_position.y = center.y + radius*positions[i].y;
+            camera_position.z = center.z + radius*positions[i].z;
 
 			camera->setPosition(camera_position);
 
 			camera->lookAt(center);
 
 			camera->setSceneBoundingBox(bb_min,bb_max);
-			camera->showEntireScene();
-
-
-			CGoGNout << "---------------------" << CGoGNendl;
+            camera->showEntireScene();
 
 			QString generatedName(mapName);
 			generatedName += "-" + cameraName;
@@ -326,7 +330,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 
 		MapParameters& mapParams = m_mapParameterSet[mhg_map];
 
-		const int width = m_fbo->getWidth(), height = m_fbo->getHeight();
+        const int width = m_fbo->getWidth(), height = m_fbo->getHeight();
 		m_shaderSimpleColor->setAttributePosition(mapParams.positionVBO);
 
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels(width, height);
@@ -355,7 +359,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 
 			glBindTexture(GL_TEXTURE_2D, *m_fbo->getDepthTexId());
 			glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
-			m_fbo->unbind();
+            m_fbo->unbind();
 
 			m_schnapps->getSelectedView()->setCurrentCamera("camera_0", false);
 
@@ -450,30 +454,30 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 
 		PFP2::MATRIX44 model_view_projection_matrix, model_view_projection_matrix_inv;
 
-		CGoGNout << "----------" << CGoGNendl;
-		CGoGNout << "----------" << CGoGNendl;
+//		CGoGNout << "----------" << CGoGNendl;
+//		CGoGNout << "----------" << CGoGNendl;
 
 		for(int i = 0; i < 4; ++i)
 		{
 			for(int j = 0; j < 4; ++j)
 			{
 				model_view_projection_matrix(i, j) = mvp_matrix[i+4*j];
-				CGoGNout << mv_matrix[i+4*j] << " " << CGoGNflush;
+//				CGoGNout << mv_matrix[i+4*j] << " " << CGoGNflush;
 			}
-			CGoGNout << CGoGNendl;
+//			CGoGNout << CGoGNendl;
 		}
 		model_view_projection_matrix.invert(model_view_projection_matrix_inv);
 
-		CGoGNout << "-----" << CGoGNendl;
+//		CGoGNout << "-----" << CGoGNendl;
 
-		for(int i = 0; i < 4; ++i)
-		{
-			for(int j = 0; j < 4; ++j)
-			{
-				CGoGNout << p_matrix[i+4*j] << " " << CGoGNflush;
-			}
-			CGoGNout << CGoGNendl;
-		}
+//		for(int i = 0; i < 4; ++i)
+//		{
+//			for(int j = 0; j < 4; ++j)
+//			{
+//				CGoGNout << p_matrix[i+4*j] << " " << CGoGNflush;
+//			}
+//			CGoGNout << CGoGNendl;
+//		}
 
 		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
