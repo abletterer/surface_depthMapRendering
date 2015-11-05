@@ -235,7 +235,7 @@ void Surface_DepthMapRendering_Plugin::changePositionVBO(const QString& view, co
 	{
 		m_main_object = m;
 		Utils::VBO* vbuf = m->getVBO(vbo);
-		m_mapParameterSet[m].positionVBO = vbuf;
+        m_mapParameterSet[m].positionVBO = vbuf;
 		if(v->isSelectedView())
 		{
 			if(v->isLinkedToMap(m))	v->updateGL();
@@ -246,10 +246,7 @@ void Surface_DepthMapRendering_Plugin::changePositionVBO(const QString& view, co
 void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int nbMax)
 {
 	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
-	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
-
-    mh_map->setBBVertexAttribute("position");
-    mh_map->updateBB();
+    MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
 
 	if(mh_map && m_mapParameterSet.contains(mhg_map))
 	{
@@ -284,7 +281,7 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 
 		qglviewer::Vec center = (bb_min+bb_max)/2.f;
 
-		for(int i = 0; i < nbMax; ++i)
+        for(int i = 0; i < nbMax; ++i)
 		{
 			QString cameraName(baseName);
 			cameraName.append(QString::number(i));
@@ -326,7 +323,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 		{
 			CGoGNerr << "position attribute is not valid" << CGoGNendl;
 			return;
-		}
+        }
 
 		MapParameters& mapParams = m_mapParameterSet[mhg_map];
 
@@ -338,6 +335,8 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 		Utils::Chrono chrono;
 		chrono.start();
 
+        Camera* o_camera = m_schnapps->getSelectedView()->getCurrentCamera();
+
 		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
 		{
 			Camera* camera = it.value();
@@ -346,11 +345,11 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 			QString generatedName(mapName);
 			generatedName += "-" + cameraName;
 
-			m_schnapps->getSelectedView()->setCurrentCamera(camera, false);
+            m_schnapps->getSelectedView()->setCurrentCamera(camera, false);
 
 			camera->setZNear(camera->zNear());
 			camera->setZFar(camera->zFar());
-			camera->setStandard(false);
+            camera->setStandard(false);
 
 			m_fbo->bind();
 			glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
@@ -372,7 +371,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 			mapParams.decompositionLevelSet[generatedName] = 0;
 
 			MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
-			PFP2::MAP* generated_map = mh_generated->getMap();
+            PFP2::MAP* generated_map = mh_generated->getMap();
 
 			VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinatesGenerated =
 				mh_generated->addAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
@@ -394,8 +393,10 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 
 			mh_generated->notifyAttributeModification(planeCoordinatesGenerated, false);
 			mh_generated->notifyAttributeModification(imageCoordinatesGenerated, false);
-			project2DImageTo3DSpace(mapName, generatedName);
+            project2DImageTo3DSpace(mapName, generatedName);
 		}
+
+        m_schnapps->getSelectedView()->setCurrentCamera(o_camera, false);
 
 		CGoGNout << "Temps d'échantillonnage : " << chrono.elapsed() << " ms " << CGoGNflush;
 		CGoGNout << "pour " << mapParams.depthCameraSet.size() << " vue(s) différente(s) " << CGoGNflush;
@@ -422,8 +423,8 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
 		if(!position.isValid())
 		{
-			position = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("position");
-		}
+            position = mh_generated->addAttribute<PFP2::VEC3, VERTEX>("position");
+        }
 
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> planeCoordinates = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("PlaneCoordinates");
 		if(!planeCoordinates.isValid())
@@ -495,8 +496,7 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 		}
 
 		mh_generated->notifyConnectivityModification(false);
-		mh_generated->notifyAttributeModification(position, false);
-		mh_generated->updateBB(position);
+        mh_generated->notifyAttributeModification(position, false);
 	}
 }
 
@@ -574,6 +574,7 @@ bool Surface_DepthMapRendering_Plugin::lowerResolution(const QString& mapOrigin,
 
 			regenerateMap(mapOrigin, mapGenerated);
 			project2DImageTo3DSpace(mapOrigin, mapGenerated);
+            mh_generated->updateBB();
 
 			return true;
 		}
