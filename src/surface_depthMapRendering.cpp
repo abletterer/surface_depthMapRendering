@@ -572,7 +572,7 @@ bool Surface_DepthMapRendering_Plugin::lowerResolution(const QString& mapOrigin,
 				pixels(i, height2-1) = (pixels(i, height2-1)-pixels_tmp(i, height2-2))/2.f;
 			}
 
-			regenerateMap(mapOrigin, mapGenerated);
+            regenerateMap(mapOrigin, mapGenerated);
 			project2DImageTo3DSpace(mapOrigin, mapGenerated);
             mh_generated->updateBB();
 
@@ -683,6 +683,12 @@ bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin,
 			CGoGNerr << "position attribute is not valid" << CGoGNendl;
 			return false;
 		}
+        VertexAttribute<PFP2::VEC3, PFP2::MAP> normal = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("normal");
+        if(!position.isValid())
+        {
+            CGoGNerr << "normal attribute is not valid" << CGoGNendl;
+            return false;
+        }
 
 		QString filename(directory);
 		filename += "/" + mapOrigin + "/";
@@ -717,7 +723,11 @@ bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin,
 			filename += "-With.ply";
 		}
 
-		return Algo::Surface::Export::exportPLYVert<PFP2>(*generated_map, position, filename.toStdString().c_str(), false);
+        std::vector<VertexAttribute<typename PFP2::VEC3, typename PFP2::MAP>*> attribs;
+        attribs.push_back(&position);
+        attribs.push_back(&normal);
+
+        return Algo::Surface::Export::exportPLYnew<PFP2>(*generated_map, attribs, filename.toStdString().c_str(), false);
 	}
 
 	return false;
