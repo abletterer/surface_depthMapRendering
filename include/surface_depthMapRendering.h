@@ -125,7 +125,7 @@ public slots: //Python calls
 	 */
 	void normalEstimation(const QString& mapOrigin, const QString& mapGenerated);
 	void confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated);
-	void densityEstimation(const QString& mapOrigin, const QString& mapGenerated);
+	void densityEstimation(const QString& mapOrigin, const QString& mapGenerated, const int radius);
 	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated, const int criteria=DENSITY);
 
 	void regenerateMap(const QString& mapOrigin, const QString& mapGenerated);
