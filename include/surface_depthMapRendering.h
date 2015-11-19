@@ -114,10 +114,14 @@ public slots: //Python calls
 	/*
 	 * Export de données
 	 */
-	bool savePointCloud(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/", const int criteria=DENSITY);
-	bool saveOriginalDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/");
-	bool saveModifiedDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory = "/home/blettere/Projets/Results/", const int criteria=DENSITY);
-	bool saveMergedPointCloud(const QString& mapOrigin, const QStringList& mapNames, const QString& directory = "/home/blettere/Projets/Results/", const int criteria=DENSITY);
+	bool savePointCloud(const QString& mapOrigin, const QString& mapGenerated,
+						const QString& directory = "/home/blettere/Projets/Results/", const int criteria=DENSITY, const float radius=1);
+	bool saveOriginalDepthMap(const QString& mapOrigin, const QString& mapGenerated,
+							  const QString& directory = "/home/blettere/Projets/Results/");
+	bool saveModifiedDepthMap(const QString& mapOrigin, const QString& mapGenerated,
+							  const QString& directory = "/home/blettere/Projets/Results/", const int criteria=DENSITY, const float radius=1);
+	bool saveMergedPointCloud(const QString& mapOrigin, const QStringList& mapNames,
+							  const QString& directory = "/home/blettere/Projets/Results/", const int criteria=DENSITY, const float radius=1);
 	void exportModelPly(const QString& mapName, const QString& directory = "/home/blettere/Projets/Results/");
 
 	/*
@@ -125,7 +129,7 @@ public slots: //Python calls
 	 */
 	void normalEstimation(const QString& mapOrigin, const QString& mapGenerated);
 	void confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated);
-	void densityEstimation(const QString& mapOrigin, const QString& mapGenerated, const int radius);
+	void densityEstimation(const QString& mapOrigin, const QString& mapGenerated, const float radius);
 	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated, const int criteria=DENSITY);
 
 	void regenerateMap(const QString& mapOrigin, const QString& mapGenerated);

@@ -668,7 +668,8 @@ bool Surface_DepthMapRendering_Plugin::upperResolution(const QString& mapOrigin,
 bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin,
 													  const QString& mapGenerated,
 													  const QString& directory,
-													  const int criteria)
+													  const int criteria,
+													  const float radius)
 {
 	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
 	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
@@ -704,7 +705,7 @@ bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin,
 
 		if(m_correspondance_done)
 		{
-			filename += "-Without";
+			filename += "-Without-radius_"+QString::number(radius);
 
 			switch(criteria)
 			{
@@ -811,7 +812,8 @@ bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOr
 bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOrigin,
 															const QString& mapGenerated,
 															const QString& directory,
-															const int criteria)
+															const int criteria,
+															const float radius)
 {
 	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
 	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
@@ -844,7 +846,7 @@ bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOr
 		filename += QString::number(width) + "x" + QString::number(height) + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
-		filename += mapGenerated + "-modifiedDepthMap";
+		filename += mapGenerated + "-modifiedDepthMap-radius_"+QString::number(radius);
 
 		switch(criteria)
 		{
@@ -908,7 +910,8 @@ bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOr
 bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOrigin,
 															const QStringList& mapNames,
 															const QString& directory,
-															const int criteria)
+															const int criteria,
+															const float radius)
 {
 	if(!mapOrigin.isEmpty() && !mapNames.empty() && !directory.isEmpty())
 	{
@@ -957,7 +960,8 @@ bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOr
 
 			if(m_correspondance_done)
 			{
-				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-Without-Level-" + QString::number(level);
+				filename += mapOrigin + "-" + QString::number(width) + "x" + QString::number(height) + "-Merged-Without-Level-" + QString::number(level)
+						+"-radius_"+QString::number(radius);
 
 				switch(criteria)
 				{
@@ -1131,7 +1135,7 @@ void Surface_DepthMapRendering_Plugin::confidenceEstimation(const QString& mapOr
 	}
 }
 
-void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigin, const QString& mapGenerated, const int radius)
+void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigin, const QString& mapGenerated, const float radius)
 {
 	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
 	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
@@ -1167,22 +1171,102 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 			imageDarts(x, y) = d;
 		}
 
-		const int N_SIZE = 10;
-		//Rayon normalisé par rapport à la diagonale de la boîte englobante du nuage de points partiel
-		const float NORM_RADIUS_SPHERE = radius/mh_generated->getBBdiagSize();
+		const int N_SIZE = 20;
+		//Rayon normalisé par rapport à la diagonale de la boîte englobante du nuage de points original
+		const float NORM_RADIUS_SPHERE = radius/mh_origin->getBBdiagSize();
 		//Au carré pour n'avoir qu'à calculer la norme au carré
 		const float RADIUS2_SPHERE = NORM_RADIUS_SPHERE*NORM_RADIUS_SPHERE;
 		const float VOLUME_SPHERE = (4./3.)*M_PI*(NORM_RADIUS_SPHERE*NORM_RADIUS_SPHERE*NORM_RADIUS_SPHERE);
 
+		std::cout << NORM_RADIUS_SPHERE << std::endl;
+
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
-			int count = 0;
+			int count = 1;	//Toujours 1 au début (parce qu'il y a au moins appartenant à la sphère : lui-même
+
+			bool stop_search = false;
+			int neighborhood = 1;
+			while(!stop_search)
+			{
+				stop_search = true;
+				int min_i = x-neighborhood>0?x-neighborhood:0;
+				int max_i = x+neighborhood<depthImage.cols()?x+neighborhood:depthImage.cols()-1;
+                
+                bool do_min = true, do_max = true;
+                
+                int min_j = y-neighborhood;
+                if(min_j<0)
+                {
+                    do_min = false;
+                }
+                
+                int max_j = y-neighborhood;
+                if(max_j<0)
+                {
+                    do_max = false;
+                }
+                
+				for(int i = min_i; i <= max_i; ++i)
+				{
+					if(do_min && fabs(1.f - depthImage(i, min_j)) > FLT_EPSILON)
+					{
+						if((position[d]-position[imageDarts(i, min_j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
+						{
+							//Si le point est contenu dans la sphere de rayon NORM_RADIUS_SPHERE
+							++count;
+							stop_search = false;
+						}
+					}
+                    
+					if(do_max && fabs(1.f - depthImage(i, max_j)) > FLT_EPSILON)
+					{
+						if((position[d]-position[imageDarts(i, min_j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
+						{
+							//Si le point est contenu dans la sphere de rayon NORM_RADIUS_SPHERE
+							++count;
+							stop_search = false;
+						}
+					}
+				}
+                
+                do_min = do_max = true;
+                
+                //ADD SAME AS ABOVE
+
+				for(int j = min_j+1; j < max_j-1; ++j)
+				{
+					j = y-neighborhood;
+					if(fabs(1.f - depthImage(i, j)) > FLT_EPSILON)
+					{
+						if((position[d]-position[imageDarts(i, j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
+						{
+							//Si le point est contenu dans la sphere de rayon NORM_RADIUS_SPHERE
+							++count;
+							stop_search = false;
+						}
+					}
+					j = y+neighborhood;
+					if(fabs(1.f - depthImage(i, j)) > FLT_EPSILON)
+					{
+						if((position[d]-position[imageDarts(i, j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
+						{
+							//Si le point est contenu dans la sphere de rayon NORM_RADIUS_SPHERE
+							++count;
+							stop_search = false;
+						}
+					}
+				}
+
+				++neighborhood;
+			}
+
+
 			//Parcours de l'ensemble des points appartenant au N_SIZE-voisinage pixellique du point courant d (y compris lui-même)
 			int min_i = x-N_SIZE>0?x-N_SIZE:0;
 			int min_j = y-N_SIZE>0?y-N_SIZE:0;
-			int max_i = x+N_SIZE<depthImage.rows()?x+N_SIZE:depthImage.rows();
-			int max_j = y+N_SIZE<depthImage.cols()?y+N_SIZE:depthImage.cols();
+			int max_i = x+N_SIZE<depthImage.cols()?x+N_SIZE:depthImage.cols();
+			int max_j = y+N_SIZE<depthImage.rows()?y+N_SIZE:depthImage.rows();
 			for(int i = min_i; i < max_i; ++i)
 			{
 				for(int j = min_j; j < max_j; ++j)
