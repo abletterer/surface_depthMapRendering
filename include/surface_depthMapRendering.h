@@ -39,6 +39,7 @@ struct MapParameters
 
 	QHash<QString, Camera*> depthCameraSet;
 	QHash<QString, Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> > depthImageSet;
+    QHash<QString, Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> > newDepthImageSet;
 	QHash<QString, int> decompositionLevelSet;
 	QHash<QString, MapHandlerGen*> projectedMapSet;
 };
@@ -131,6 +132,8 @@ public slots: //Python calls
 	void confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated);
 	void densityEstimation(const QString& mapOrigin, const QString& mapGenerated, const float radius);
 	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated, const int criteria=DENSITY);
+    
+    void updateDepthImages(const QString& mapOrigin);
 
 	void regenerateMap(const QString& mapOrigin, const QString& mapGenerated);
 	void deleteBackground(const QString& mapOrigin, const QString& mapGenerated);

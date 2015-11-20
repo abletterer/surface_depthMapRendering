@@ -276,9 +276,6 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 
 		mh_map->transformedBB(bb_min, bb_max);
 
-		CGoGNout << bb_min.x << " " << bb_min.y << " " << bb_min.z << CGoGNendl;
-		CGoGNout << bb_max.x << " " << bb_max.y << " " << bb_max.z << CGoGNendl;
-
 		qglviewer::Vec center = (bb_min+bb_max)/2.f;
 
 		for(int i = 0; i < nbMax; ++i)
@@ -1171,14 +1168,13 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 			imageDarts(x, y) = d;
 		}
 
-		const int N_SIZE = 20;
 		//Rayon normalisé par rapport à la diagonale de la boîte englobante du nuage de points original
-		const float NORM_RADIUS_SPHERE = radius/mh_origin->getBBdiagSize();
+		const float NORM_RADIUS_SPHERE = radius*mh_origin->getBBdiagSize();
 		//Au carré pour n'avoir qu'à calculer la norme au carré
 		const float RADIUS2_SPHERE = NORM_RADIUS_SPHERE*NORM_RADIUS_SPHERE;
 		const float VOLUME_SPHERE = (4./3.)*M_PI*(NORM_RADIUS_SPHERE*NORM_RADIUS_SPHERE*NORM_RADIUS_SPHERE);
 
-		std::cout << NORM_RADIUS_SPHERE << std::endl;
+		std::cout << std::endl << NORM_RADIUS_SPHERE << std::endl;
 
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
@@ -1190,26 +1186,42 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 			while(!stop_search)
 			{
 				stop_search = true;
-				int min_i = x-neighborhood>0?x-neighborhood:0;
-				int max_i = x+neighborhood<depthImage.cols()?x+neighborhood:depthImage.cols()-1;
+                                
+                bool do_min_i = true, do_max_i = true;
                 
-                bool do_min = true, do_max = true;
+                int min_i = x-neighborhood;
+                if(min_i<0)
+                {
+                    do_min_i = false;
+                    min_i = 0;
+                }
+                
+                int max_i = x+neighborhood;
+                if(max_i>=depthImage.cols())
+                {
+                    do_max_i = false;
+                    max_i = depthImage.cols()-1;
+                }
+                
+                bool do_min_j = true, do_max_j = true;
                 
                 int min_j = y-neighborhood;
                 if(min_j<0)
                 {
-                    do_min = false;
+                    do_min_j = false;
+                    min_j = 0;
                 }
                 
                 int max_j = y-neighborhood;
-                if(max_j<0)
+                if(max_j>=depthImage.rows())
                 {
-                    do_max = false;
+                    do_max_j = false;
+                    max_j = depthImage.rows()-1;
                 }
                 
 				for(int i = min_i; i <= max_i; ++i)
 				{
-					if(do_min && fabs(1.f - depthImage(i, min_j)) > FLT_EPSILON)
+					if(do_min_j && fabs(1.f - depthImage(i, min_j)) > FLT_EPSILON)
 					{
 						if((position[d]-position[imageDarts(i, min_j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
 						{
@@ -1219,9 +1231,9 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 						}
 					}
                     
-					if(do_max && fabs(1.f - depthImage(i, max_j)) > FLT_EPSILON)
+					if(do_max_j && fabs(1.f - depthImage(i, max_j)) > FLT_EPSILON)
 					{
-						if((position[d]-position[imageDarts(i, min_j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
+						if((position[d]-position[imageDarts(i, max_j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
 						{
 							//Si le point est contenu dans la sphere de rayon NORM_RADIUS_SPHERE
 							++count;
@@ -1230,26 +1242,24 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 					}
 				}
                 
-                do_min = do_max = true;
-                
-                //ADD SAME AS ABOVE
+                ++min_j;
+                --max_j;
 
-				for(int j = min_j+1; j < max_j-1; ++j)
+				for(int j = min_j; j <= max_j; ++j)
 				{
-					j = y-neighborhood;
-					if(fabs(1.f - depthImage(i, j)) > FLT_EPSILON)
+                    if(do_min_i && fabs(1.f - depthImage(min_i, j)) > FLT_EPSILON)
 					{
-						if((position[d]-position[imageDarts(i, j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
+						if((position[d]-position[imageDarts(min_i, j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
 						{
 							//Si le point est contenu dans la sphere de rayon NORM_RADIUS_SPHERE
 							++count;
 							stop_search = false;
 						}
 					}
-					j = y+neighborhood;
-					if(fabs(1.f - depthImage(i, j)) > FLT_EPSILON)
+                    
+					if(do_max_i && fabs(1.f - depthImage(max_i, j)) > FLT_EPSILON)
 					{
-						if((position[d]-position[imageDarts(i, j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
+						if((position[d]-position[imageDarts(min_i, j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
 						{
 							//Si le point est contenu dans la sphere de rayon NORM_RADIUS_SPHERE
 							++count;
@@ -1257,29 +1267,7 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 						}
 					}
 				}
-
 				++neighborhood;
-			}
-
-
-			//Parcours de l'ensemble des points appartenant au N_SIZE-voisinage pixellique du point courant d (y compris lui-même)
-			int min_i = x-N_SIZE>0?x-N_SIZE:0;
-			int min_j = y-N_SIZE>0?y-N_SIZE:0;
-			int max_i = x+N_SIZE<depthImage.cols()?x+N_SIZE:depthImage.cols();
-			int max_j = y+N_SIZE<depthImage.rows()?y+N_SIZE:depthImage.rows();
-			for(int i = min_i; i < max_i; ++i)
-			{
-				for(int j = min_j; j < max_j; ++j)
-				{
-					if(fabs(1.f - depthImage(i, j)) > FLT_EPSILON)
-					{
-						if((position[d]-position[imageDarts(i, j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
-						{
-							//Si le point est contenu dans la sphere de rayon RADIUS
-							++count;
-						}
-					}
-				}
 			}
 			samplingDensity[d] = count/VOLUME_SPHERE;
 		}
@@ -1306,6 +1294,8 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 		Camera* camera = mapParams.depthCameraSet[mapGenerated];
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& depthImage = mapParams.depthImageSet[mapGenerated];
+        Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& newDepthImage = mapParams.newDepthImageSet[mapGenerated];
+        newDepthImage = Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>(depthImage);
 
 		PFP2::MAP* generated_map = mh_generated->getMap();
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
@@ -1369,7 +1359,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 //		std::vector<MapHandlerGen*> vec_maps;
 //		vec_maps.reserve(11);
-
+        
 		for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
 		{
 			if(it.value() != mhg_generated)
@@ -1500,22 +1490,33 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 //			}
 			if(criteriaAttribute[d] < maxConfidenceValues(x, y))
 			{
-				//Suppression du point dans la carte de profondeur
-				depthImage(x, y) = 1.f;
+				//Suppression du point dans la nouvelle carte de profondeur (pour ne pas influer les comparaisons futures
+				newDepthImage(x, y) = 1.f;
 			}
 		}
-
-		CGoGNout << ".. fait en " << chrono.elapsed() << " ms" << CGoGNendl;
-
-		deleteBackground(mapOrigin, mapGenerated);
-
-		mh_generated->notifyConnectivityModification(false);
-		mh_generated->notifyAttributeModification(position, false);
-		mh_generated->notifyAttributeModification(criteriaAttribute, false);
-		mh_generated->notifyAttributeModification(imageCoordinates, false);
-
-		m_correspondance_done = true;
+        mh_generated->notifyAttributeModification(criteriaAttribute, false);
 	}
+}
+
+void Surface_DepthMapRendering_Plugin::updateDepthImages(const QString& mapOrigin)
+{
+    MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
+	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
+    
+    if(mh_origin && m_mapParameterSet.contains(mh_origin))
+    {
+        MapParameters& mapParams = m_mapParameterSet[mh_origin];
+		for(QHash<QString, Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>>::iterator it = mapParams.newDepthImageSet.begin(); it != mapParams.newDepthImageSet.end(); ++it)
+		{
+            const QString mapGenerated = it.key();
+            mapParams.depthImageSet[mapGenerated] = it.value();
+            it.value().resize(0, 0);
+            
+            deleteBackground(mapOrigin, mapGenerated);
+        }
+    }
+    
+    m_correspondance_done = true;
 }
 
 void Surface_DepthMapRendering_Plugin::regenerateMap(const QString& mapOrigin, const QString& mapGenerated)
@@ -1627,6 +1628,10 @@ void Surface_DepthMapRendering_Plugin::deleteBackground(const QString& mapOrigin
 			mh_generated->updateVBO(position);
 			mh_generated->updateBB(position);
 		}
+        
+        mh_generated->notifyConnectivityModification(false);
+        mh_generated->notifyAttributeModification(position, false);
+        mh_generated->notifyAttributeModification(imageCoordinates, false);
 	}
 }
 
