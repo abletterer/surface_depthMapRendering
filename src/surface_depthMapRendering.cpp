@@ -1215,7 +1215,7 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 							stop_search = false;
 						}
 					}
-                    
+
 					if(do_max_j && fabs(1.f - depthImage(i, max_j)) > FLT_EPSILON)
 					{
 						if((position[d]-position[imageDarts(i, max_j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
@@ -1226,14 +1226,14 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 						}
 					}
 				}
-                
-                ++min_j;
-                --max_j;
+
+				++min_j;
+				--max_j;
 
 //				#pragma omp parallel for shared(count)
 				for(int j = min_j; j <= max_j; ++j)
 				{
-                    if(do_min_i && fabs(1.f - depthImage(min_i, j)) > FLT_EPSILON)
+					if(do_min_i && fabs(1.f - depthImage(min_i, j)) > FLT_EPSILON)
 					{
 						if((position[d]-position[imageDarts(min_i, j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
 						{
@@ -1242,7 +1242,7 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 							stop_search = false;
 						}
 					}
-                    
+
 					if(do_max_i && fabs(1.f - depthImage(max_i, j)) > FLT_EPSILON)
 					{
 						if((position[d]-position[imageDarts(max_i, j)]).norm2() < RADIUS2_SPHERE)	//Comparaison avec la norme du vecteur au carré (plus rapide)
@@ -1280,8 +1280,8 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 		Camera* camera = mapParams.depthCameraSet[mapGenerated];
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& depthImage = mapParams.depthImageSet[mapGenerated];
-        Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& newDepthImage = mapParams.newDepthImageSet[mapGenerated];
-        newDepthImage = Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>(depthImage);
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& newDepthImage = mapParams.newDepthImageSet[mapGenerated];
+		newDepthImage = Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>(depthImage);
 
 		PFP2::MAP* generated_map = mh_generated->getMap();
 		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
@@ -1346,7 +1346,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 //		std::vector<MapHandlerGen*> vec_maps;
 //		vec_maps.reserve(11);
-        
+
 		for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
 		{
 			if(it.value() != mhg_generated)
@@ -1489,23 +1489,23 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 
 void Surface_DepthMapRendering_Plugin::updateDepthImages(const QString& mapOrigin)
 {
-    MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
+	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
 	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
-    
-    if(mh_origin && m_mapParameterSet.contains(mh_origin))
-    {
-        MapParameters& mapParams = m_mapParameterSet[mh_origin];
+
+	if(mh_origin && m_mapParameterSet.contains(mh_origin))
+	{
+		MapParameters& mapParams = m_mapParameterSet[mh_origin];
 		for(QHash<QString, Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>>::iterator it = mapParams.newDepthImageSet.begin(); it != mapParams.newDepthImageSet.end(); ++it)
 		{
-            const QString mapGenerated = it.key();
-            mapParams.depthImageSet[mapGenerated] = it.value();
-            it.value().resize(0, 0);
-            
-            deleteBackground(mapOrigin, mapGenerated);
-        }
-    }
-    
-    m_correspondance_done = true;
+			const QString mapGenerated = it.key();
+			mapParams.depthImageSet[mapGenerated] = it.value();
+			it.value().resize(0, 0);
+
+			deleteBackground(mapOrigin, mapGenerated);
+		}
+	}
+
+	m_correspondance_done = true;
 }
 
 void Surface_DepthMapRendering_Plugin::regenerateMap(const QString& mapOrigin, const QString& mapGenerated)
@@ -1617,10 +1617,10 @@ void Surface_DepthMapRendering_Plugin::deleteBackground(const QString& mapOrigin
 			mh_generated->updateVBO(position);
 			mh_generated->updateBB(position);
 		}
-        
-        mh_generated->notifyConnectivityModification(false);
-        mh_generated->notifyAttributeModification(position, false);
-        mh_generated->notifyAttributeModification(imageCoordinates, false);
+
+		mh_generated->notifyConnectivityModification(false);
+		mh_generated->notifyAttributeModification(position, false);
+		mh_generated->notifyAttributeModification(imageCoordinates, false);
 	}
 }
 
