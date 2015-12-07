@@ -283,24 +283,31 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 			QString cameraName(baseName);
 			cameraName.append(QString::number(i));
 			Camera* camera = m_schnapps->addCamera(cameraName);
-			
-			camera->disableViewsBoundingBoxFitting();
 
 			qglviewer::Vec camera_position(camera->position());
 
-			float radius = qAbs(camera_position.z - center.z);
-			radius += 1;	//To avoid problems when camera is placed at the center of the scene
+			float radius = 1;
+			
+			radius *= (bb_max-bb_min).norm()/2;
 
 			camera_position.x = center.x + radius*positions[i].x;
 			camera_position.y = center.y + radius*positions[i].y;
 			camera_position.z = center.z + radius*positions[i].z;
 
 			camera->setPosition(camera_position);
-
+			
 			camera->lookAt(center);
-
-			camera->setSceneBoundingBox(bb_min,bb_max);
-			camera->showEntireScene();
+			
+			camera->setSceneCenter(center);
+			camera->centerScene();
+			
+			camera_position = camera->position();
+			
+			camera->disableViewsBoundingBoxFitting();
+			
+			camera->setZNear((camera_position-center-radius*positions[i]/2).norm());
+			camera->setZFar((camera_position-center+radius*positions[i]/2).norm());
+			camera->setStandard(false);
 
 			QString generatedName(mapName);
 			generatedName += "-" + cameraName;
@@ -345,13 +352,9 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName)
 			generatedName += "-" + cameraName;
 			
 			qglviewer::Vec camera_position = camera->position();
-
+			
 			m_schnapps->getSelectedView()->setCurrentCamera(camera);
-
-			camera->setZNear(camera->zNear());
-			camera->setZFar(camera->zFar());
-			camera->setStandard(false);
-
+			
 			m_fbo->bind();
 			glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
 
@@ -726,8 +729,10 @@ bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOr
 	if(!directory.isEmpty() && mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
 	{
 		MapParameters& mapParams = m_mapParameterSet[mh_origin];
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& pixels = mapParams.depthImageSet[mapGenerated];
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels = mapParams.depthImageSet[mapGenerated];
 		Camera* camera = mapParams.depthCameraSet[mapGenerated];
+		
+		pixels = (pixels.array()+1)/2.;
 
 		int width = m_fbo->getWidth(), height = m_fbo->getHeight();
 
@@ -753,7 +758,7 @@ bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOr
 
 		for(int j = height-1; j >= 0; --j)
 		{
-			for(unsigned int i = 0; i < width; ++i)
+			for(int i = 0; i < width; ++i)
 			{
 				out << pixels(i, j) << " " << std::flush;
 			}
@@ -777,7 +782,7 @@ bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOr
 		{
 			for(int j = 0; j < 4; ++j)
 			{
-				out << mvp_matrix[i*4+j] << " " << std::flush;
+				out << mvp_matrix[i+4*j] << " " << std::flush;
 			}
 			out << std::endl;
 		}
@@ -815,7 +820,9 @@ bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOr
 		int width = m_fbo->getWidth(), height = m_fbo->getHeight();
 
 		MapParameters& mapParams = m_mapParameterSet[mh_origin];
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& pixels = mapParams.depthImageSet[mapGenerated];
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels = mapParams.depthImageSet[mapGenerated];
+		
+		pixels = (pixels.array()+1)/2.;
 
 		QString filename(directory);
 		filename += "/" + mapOrigin + "/";
@@ -857,9 +864,9 @@ bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOr
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
 
-			if(1.f-pixels(x, y) > FLT_EPSILON)
+			if(fabs(1.f-pixels(x, y)) > FLT_EPSILON)
 			{
-				mask_pixels(x, y) = 1.;
+				mask_pixels(x, y) = 1;
 			}
 		}
 
@@ -1163,7 +1170,7 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
 		{
 			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
-			int count = 1;	//Toujours 1 au début (parce qu'il y a au moins appartenant à la sphère : lui-même
+			int count = 1;	//Toujours 1 au début (parce qu'il y a au moins un point appartenant à la sphère : lui-même
 
 			bool stop_search = false;
 			int neighborhood = 1;
@@ -1325,6 +1332,8 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		qglviewer::Vec camera_position = camera->position();
 		m_schnapps->getSelectedView()->setCurrentCamera(camera);
 		camera->setPosition(camera_position);
+		
+		float z_near = camera->zNear(), z_far = camera->zFar();
 
 		/*
 		 * z_w = valeur de profondeur de l'image ; dans l'intervalle [0;1]
@@ -1336,7 +1345,7 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 		 * z_w = (f*(p+n))/(p*(f-n)) => Fonction inverse qui pour une distance d'un point à la caméra, donne sa valeur de profondeur
 		 */
 
-		const float threshold = 1/128.f;
+		const float threshold = 1/64.f;
 
 //		std::vector<Dart> tmp_vector;
 //		tmp_vector.resize(11);
@@ -1393,6 +1402,8 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 				currentDepthImage = currentDepthImage.array()*2-1;    //Set range to [-1;1]
 				
 				currentDepthImage = (depthImage.array()-currentDepthImage.array()).abs();
+				
+//				currentDepthImage = (z_far*z_near)/(((currentDepthImage.array()+1)/2)*(z_far-z_near)+z_far);
 
 //				int count = 0, count_0 = 0;
 
@@ -1446,7 +1457,12 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 							//Dummy test to avoid problems
 
 //							correspondingPoints[i+j*width][size] = Dart::nil();
+							
+//							float d_o = (z_far*z_near)/(((depthImage(i, j)+1)/2)*(z_far-z_near)+z_far);
+							
+//							CGoGNout << fabs(d_o-currentDepthImage(i, j)) << CGoGNendl;
 
+//							if(fabs(1-depthImage(i, j)) > FLT_EPSILON && fabs(d_o-currentDepthImage(i, j)) < threshold)
 							if(fabs(1-depthImage(i, j)) > FLT_EPSILON && currentDepthImage(i, j) < threshold)
 							{
 //								correspondingPoints[i+j*width][size] = d;
@@ -1479,10 +1495,10 @@ void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& ma
 			{
 				//Suppression du point dans la nouvelle carte de profondeur (pour ne pas influer les comparaisons futures)
 				newDepthImage(x, y) = 1.f;
-				depthImage(x, y) = 1.f;
+//				depthImage(x, y) = 1.f;
 			}
 		}
-		deleteBackground(mapOrigin, mapGenerated);
+//		deleteBackground(mapOrigin, mapGenerated);
         mh_generated->notifyAttributeModification(criteriaAttribute, false);
 	}
 }
