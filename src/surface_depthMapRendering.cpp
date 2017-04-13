@@ -338,7 +338,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels(width, height);
 
-		int total_time = 0;
+		int total_sampling_time = 0, total_saving_time = 0;
 
 		Camera* o_camera = m_schnapps->getSelectedView()->getCurrentCamera();
 
@@ -366,8 +366,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
 			m_fbo->unbind();
 			
-			total_time += chrono.elapsed();
-			
+			total_sampling_time += chrono.elapsed();
 			QString filename(directory);
 			filename += "/" + mapName + "/";
 			mkdir(filename.toStdString().c_str(), 0777);
@@ -379,6 +378,8 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			mkdir(filename.toStdString().c_str(), 0777);
 	
 			filename += generatedName;
+			
+			chrono.start();
 	
 			std::ofstream out;
 			out.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::out);
@@ -412,6 +413,8 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			}
 			
 			out.close();
+			
+			total_saving_time += chrono.elapsed();
 
 //			m_schnapps->getSelectedView()->setCurrentCamera("camera_0");
 
@@ -452,10 +455,11 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 //		m_schnapps->getSelectedView()->setCurrentCamera(o_camera);
 
-		CGoGNout << "Temps d'échantillonnage : " << total_time << " ms " << CGoGNflush;
+		CGoGNout << "Temps d'échantillonnage : " << total_sampling_time << " ms " << CGoGNflush;
 		CGoGNout << "pour " << mapParams.depthCameraSet.size() << " vue(s) différente(s) " << CGoGNflush;
 		CGoGNout << "de taille " << width << "x" << height << CGoGNflush;
 		CGoGNout << " sur un objet composé de " << mh_map->getMap()->getNbCells(VERTEX) << " point(s)" << CGoGNendl;
+		CGoGNout << "Temps d'enregistrement des cartes de profondeur : " << total_saving_time << " ms " << CGoGNendl;
 
 //		m_schnapps->getSelectedView()->updateGL();
 	}
