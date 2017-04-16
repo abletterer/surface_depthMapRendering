@@ -22,6 +22,8 @@
 
 #include <fstream>
 #include <thread>
+#include <QFileDialog>
+
 
 namespace CGoGN
 {
@@ -39,7 +41,7 @@ struct MapParameters
 
 	QHash<QString, Camera*> depthCameraSet;
 	QHash<QString, Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> > depthImageSet;
-    QHash<QString, Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> > newDepthImageSet;
+	QHash<QString, Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> > newDepthImageSet;
 	QHash<QString, int> decompositionLevelSet;
 	QHash<QString, MapHandlerGen*> projectedMapSet;
 };
@@ -60,6 +62,9 @@ class Surface_DepthMapRendering_Plugin : public PluginInteraction
 {
 	Q_OBJECT
 	Q_INTERFACES(CGoGN::SCHNApps::Plugin)
+#if CGOGN_QT_DESIRED_VERSION == 5
+	Q_PLUGIN_METADATA(IID "CGoGN.SCHNapps.Plugin")
+#endif
 
 public:
 	Surface_DepthMapRendering_Plugin()
@@ -88,9 +93,12 @@ private:
 private slots:
 	void openDepthMapRenderingDialog();
 	void closeDepthMapRenderingDialog();
+
+	void createFBOFromDialog();
 	void lowerResolutionFromDialog();
 	void upperResolutionFromDialog();
 	void saveMergedPointCloudFromDialog();
+	void saveDepthMapScreenshotFromDialog();
 
 	//SCHNApps signals
 	void mapAdded(MapHandlerGen* map);
@@ -123,6 +131,8 @@ public slots: //Python calls
 							  const QString& directory = "/home/blettere/Projets/Results/", const int criteria=DENSITY, const float radius=1);
 	bool saveMergedPointCloud(const QString& mapOrigin, const QStringList& mapNames,
 							  const QString& directory = "/home/blettere/Projets/Results/", const int criteria=DENSITY, const float radius=1);
+	void saveDepthMapScreenshot(const QString& mapName,
+								const QString& directory = "/home/blettere/Projets/Results/");
 	void exportModelPly(const QString& mapName, const QString& directory = "/home/blettere/Projets/Results/");
 
 	/*
@@ -132,8 +142,8 @@ public slots: //Python calls
 	void confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated);
 	void densityEstimation(const QString& mapOrigin, const QString& mapGenerated, const float radius);
 	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated, const int criteria=DENSITY);
-    
-    void updateDepthImages(const QString& mapOrigin);
+
+	void updateDepthImages(const QString& mapOrigin);
 
 	void regenerateMap(const QString& mapOrigin, const QString& mapGenerated);
 	void deleteBackground(const QString& mapOrigin, const QString& mapGenerated);

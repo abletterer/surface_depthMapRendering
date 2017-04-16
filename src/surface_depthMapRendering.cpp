@@ -1,4 +1,4 @@
-#include "surface_depthMapRendering.h"
+#include "../include/surface_depthMapRendering.h"
 
 #include "mapHandler.h"
 
@@ -19,6 +19,8 @@ bool Surface_DepthMapRendering_Plugin::enable()
 	m_draw = false;
 	m_correspondance_done = false;
 
+	m_fbo = NULL;
+
 	m_shaderSimpleColor = new CGoGN::Utils::ShaderSimpleColor();
 	m_shaderScalarFieldReal = new CGoGN::Utils::ShaderScalarFieldReal();
 
@@ -27,9 +29,12 @@ bool Surface_DepthMapRendering_Plugin::enable()
 
 	connect(m_depthMapRenderingAction, SIGNAL(triggered()), this, SLOT(openDepthMapRenderingDialog()));
 
+	connect(m_depthMapRenderingDialog->button_createFBO, SIGNAL(clicked()), this, SLOT(createFBOFromDialog()));
+
 	connect(m_depthMapRenderingDialog->button_lower_resolution, SIGNAL(clicked()), this, SLOT(lowerResolutionFromDialog()));
 	connect(m_depthMapRenderingDialog->button_upper_resolution, SIGNAL(clicked()), this, SLOT(upperResolutionFromDialog()));
 	connect(m_depthMapRenderingDialog->button_saveMergedPointCloud, SIGNAL(clicked()), this, SLOT(saveMergedPointCloudFromDialog()));
+	connect(m_depthMapRenderingDialog->button_saveDepthMap, SIGNAL(clicked()), this, SLOT(saveDepthMapScreenshotFromDialog()));
 
 	connect(m_schnapps, SIGNAL(mapAdded(MapHandlerGen*)), this, SLOT(mapAdded(MapHandlerGen*)));
 	connect(m_schnapps, SIGNAL(mapRemoved(MapHandlerGen*)), this, SLOT(mapRemoved(MapHandlerGen*)));
@@ -73,6 +78,14 @@ void Surface_DepthMapRendering_Plugin::openDepthMapRenderingDialog()
 void Surface_DepthMapRendering_Plugin::closeDepthMapRenderingDialog()
 {
 	m_depthMapRenderingDialog->close();
+}
+
+void Surface_DepthMapRendering_Plugin::createFBOFromDialog()
+{
+	if(m_depthMapRenderingDialog->spin_width->value() > 0 && m_depthMapRenderingDialog->spin_height->value() > 0)
+	{
+		createFBO(m_depthMapRenderingDialog->spin_width->value(), m_depthMapRenderingDialog->spin_height->value());
+	}
 }
 
 void Surface_DepthMapRendering_Plugin::lowerResolutionFromDialog()
@@ -135,6 +148,19 @@ void Surface_DepthMapRendering_Plugin::saveMergedPointCloudFromDialog()
 			MapParameters& mapParams = m_mapParameterSet[mhg_map];
 			QStringList mapNames = mapParams.depthCameraSet.keys();
 			saveMergedPointCloud(mapName, mapNames);
+		}
+	}
+}
+
+void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshotFromDialog()
+{
+	QList<QListWidgetItem*> currentItems = m_depthMapRenderingDialog->list_maps->selectedItems();
+	if(!currentItems.empty())
+	{
+		QString path = QFileDialog::getExistingDirectory (this->m_schnapps, tr("Directory"));
+		if (path.isNull() == false )
+		{
+			saveDepthMapScreenshot(currentItems[0]->text(), path);
 		}
 	}
 }
@@ -222,9 +248,17 @@ void Surface_DepthMapRendering_Plugin::selectedCellsChanged(CellSelectorGen* cs)
 
 void Surface_DepthMapRendering_Plugin::createFBO(int width, int height)
 {
-	m_fbo = new CGoGN::Utils::FBO(width, height);
-	m_fbo->createAttachDepthTexture();
-	m_fbo->createAttachColorTexture(GL_R32F);
+	if(!m_fbo)
+	{
+		m_fbo = new CGoGN::Utils::FBO(width, height);
+		m_fbo->createAttachDepthTexture();
+		m_fbo->createAttachColorTexture(GL_R32F);
+		CGoGNout << "FBO created with a size of " << width << "x" << height << "." << CGoGNendl;
+	}
+	else
+	{
+		CGoGNout << "FBO already existing." << CGoGNendl;
+	}
 }
 
 void Surface_DepthMapRendering_Plugin::changePositionVBO(const QString& view, const QString& map, const QString& vbo)
@@ -340,8 +374,6 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 		int total_sampling_time = 0, total_saving_time = 0;
 
-		Camera* o_camera = m_schnapps->getSelectedView()->getCurrentCamera();
-
 		for(QHash<QString, Camera*>::iterator it = mapParams.depthCameraSet.begin(); it != mapParams.depthCameraSet.end(); ++it)
 		{
 			Camera* camera = it.value();
@@ -349,8 +381,6 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 			QString generatedName(mapName);
 			generatedName += "-" + cameraName;
-
-			qglviewer::Vec camera_position = camera->position();
 
 			m_schnapps->getSelectedView()->setCurrentCamera(camera);
 
@@ -365,10 +395,10 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			glBindTexture(GL_TEXTURE_2D, *m_fbo->getDepthTexId());
 			glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
 			m_fbo->unbind();
-			
+
 			total_sampling_time += chrono.elapsed();
-			
-            QString filename(directory);
+
+			QString filename(directory);
 			filename += "/" + mapName + "/";
 			mkdir(filename.toStdString().c_str(), 0777);
 
@@ -379,9 +409,9 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			mkdir(filename.toStdString().c_str(), 0777);
 
 			filename += generatedName;
-			
+
 			chrono.start();
-	
+
 			std::ofstream out;
 			out.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::out);
 			if(!out.good())
@@ -414,7 +444,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			}
 
 			out.close();
-			
+
 			total_saving_time += chrono.elapsed();
 
 //			m_schnapps->getSelectedView()->setCurrentCamera("camera_0");
@@ -775,6 +805,84 @@ bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin,
 	}
 
 	return false;
+}
+
+void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& mapName, const QString& directory)
+{
+	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
+	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
+
+	if(m_fbo && mh_map)
+	{
+		Camera* camera = m_schnapps->getSelectedView()->getCurrentCamera();
+
+		const int width = m_fbo->getWidth(), height = m_fbo->getHeight();
+
+		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_map->getAttribute<PFP2::VEC3, VERTEX>("position");
+		if(!position.isValid())
+		{
+			CGoGNerr << "position attribute is not valid" << CGoGNendl;
+			return;
+		}
+
+		m_shaderSimpleColor->setAttributePosition(mh_map->getVBO(QString::fromStdString(position.name())));
+
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels(height, width);
+
+		m_fbo->bind();
+		glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
+
+		mh_map->draw(m_shaderSimpleColor, CGoGN::Algo::Render::GL2::TRIANGLES);	//Render the map into the FrameBufferObject
+
+		glBindTexture(GL_TEXTURE_2D, *m_fbo->getDepthTexId());
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
+		m_fbo->unbind();
+
+		QString filename(directory);
+		filename += "/" + mapName + "/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += "DepthMaps/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += QString::number(width) + "x" + QString::number(height) + "/";
+		mkdir(filename.toStdString().c_str(), 0777);
+
+		filename += mapName;
+
+		std::ofstream out;
+		out.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::out);
+		if(!out.good())
+		{
+			CGoGNerr << "Unable to open file" << CGoGNendl;
+			return;
+		}
+
+		out << pixels;
+
+		out.close();
+
+		out.open(filename.toStdString() + "-MVPMatrix.dat", std::ios::out);
+		if(!out.good())
+		{
+			CGoGNerr << "Unable to open file" << CGoGNendl;
+			return;
+		}
+
+		GLdouble mvp_matrix[16];
+		camera->getModelViewProjectionMatrix(mvp_matrix);
+
+		for(int i = 0; i < 4; ++i)
+		{
+			for(int j = 0; j < 4; ++j)
+			{
+				out << mvp_matrix[i+j*4] << " " << std::flush;
+			}
+			out << std::endl;
+		}
+
+		out.close();
+	}
 }
 
 bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOrigin, const QString& mapGenerated, const QString& directory)
@@ -1753,10 +1861,10 @@ void Surface_DepthMapRendering_Plugin::verifyDepthMaps(const QString& mapOrigin,
 	}
 }
 
-#ifndef DEBUG
-Q_EXPORT_PLUGIN2(Surface_DepthMapRendering_Plugin, Surface_DepthMapRendering_Plugin)
+#if CGOGN_QT_DESIRED_VERSION == 5
+	Q_PLUGIN_METADATA(IID "CGoGN.SCHNapps.Plugin")
 #else
-Q_EXPORT_PLUGIN2(Surface_DepthMapRendering_PluginD, Surface_DepthMapRendering_Plugin)
+	Q_EXPORT_PLUGIN2(Surface_DepthMapRendering_Plugin, Surface_DepthMapRendering_Plugin)
 #endif
 
 } // namespace SCHNApps
