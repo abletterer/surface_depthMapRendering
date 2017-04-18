@@ -842,13 +842,7 @@ void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& map
 		filename += "/" + mapName + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
-		filename += "DepthMaps/";
-		mkdir(filename.toStdString().c_str(), 0777);
-
-		filename += QString::number(width) + "x" + QString::number(height) + "/";
-		mkdir(filename.toStdString().c_str(), 0777);
-
-		filename += mapName;
+		filename += mapName + "-" + QString::number(width) + "x" + QString::number(height) + "-" + QString::number(std::time(NULL));
 
 		std::ofstream out;
 		out.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::out);

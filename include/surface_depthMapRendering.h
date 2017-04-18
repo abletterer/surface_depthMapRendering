@@ -91,8 +91,6 @@ private:
 	virtual void viewUnlinked(View* view) {}
 
 private slots:
-	void openDepthMapRenderingDialog();
-	void closeDepthMapRenderingDialog();
 
 	void createFBOFromDialog();
 	void lowerResolutionFromDialog();
@@ -109,6 +107,9 @@ private slots:
 	void selectedCellsChanged(CellSelectorGen* cs);
 
 public slots: //Python calls
+
+	void openDepthMapRenderingDialog();
+	void closeDepthMapRenderingDialog();
 
 	void createFBO(int width, int height);
 
