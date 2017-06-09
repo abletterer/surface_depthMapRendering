@@ -284,7 +284,7 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 
 	if(mh_map && m_mapParameterSet.contains(mhg_map))
 	{
-		QString baseName("DepthCamera-");
+		QString baseName("DepthCamera_");
 
 		MapParameters& mapParams = m_mapParameterSet[mhg_map];
 
@@ -322,7 +322,7 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 
 			float radius = 1;
 
-			radius *= (bb_max-bb_min).norm()/4;
+			radius *= (bb_max-bb_min).norm()/2;
 
 			camera_position.x = center.x + radius*positions[i].x;
 			camera_position.y = center.y + radius*positions[i].y;
@@ -370,7 +370,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 		const int width = m_fbo->getWidth(), height = m_fbo->getHeight();
 		m_shaderSimpleColor->setAttributePosition(mapParams.positionVBO);
 
-		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels(width, height);
+		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels(height, width);
 
 		int total_sampling_time = 0, total_saving_time = 0;
 
@@ -378,9 +378,6 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 		{
 			Camera* camera = it.value();
 			QString cameraName(camera->getName());
-
-			QString generatedName(mapName);
-			generatedName += "-" + cameraName;
 
 			m_schnapps->getSelectedView()->setCurrentCamera(camera);
 
@@ -408,24 +405,32 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			filename += QString::number(width) + "x" + QString::number(height) + "/";
 			mkdir(filename.toStdString().c_str(), 0777);
 
-			filename += generatedName;
+			filename += cameraName + "/";
+			mkdir(filename.toStdString().c_str(), 0777);
+
+			filename += mapName + "-" + QString::number(width) + "x" + QString::number(height) + "-" + cameraName;
 
 			chrono.start();
 
-			std::ofstream out;
-			out.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::out);
-			if(!out.good())
+			std::ofstream out_file;
+			out_file.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::binary);
+			if(!out_file.good())
 			{
 				CGoGNerr << "Unable to open file" << CGoGNendl;
 				return;
 			}
 
-			out << pixels;
+			pixels = (pixels.array()*2-1);
 
-			out.close();
+			unsigned int tmp_size = pixels.cols()*pixels.rows();
 
-			out.open(filename.toStdString() + "-MVPMatrix.dat", std::ios::out);
-			if(!out.good())
+			out_file.write(reinterpret_cast<char*>(&tmp_size), sizeof(unsigned int));
+			out_file.write(reinterpret_cast<char*>(pixels.data()), sizeof(float)*tmp_size);
+
+			out_file.close();
+
+			out_file.open(filename.toStdString() + "-MVPMatrix.dat", std::ios::out);
+			if(!out_file.good())
 			{
 				CGoGNerr << "Unable to open file" << CGoGNendl;
 				return;
@@ -438,12 +443,12 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			{
 				for(int j = 0; j < 4; ++j)
 				{
-					out << mvp_matrix[i+j*4] << " " << std::flush;
+					out_file << mvp_matrix[i+j*4] << " " << std::flush;
 				}
-				out << std::endl;
+				out_file << std::endl;
 			}
 
-			out.close();
+			out_file.close();
 
 			total_saving_time += chrono.elapsed();
 
@@ -545,11 +550,6 @@ void Surface_DepthMapRendering_Plugin::project2DImageTo3DSpace(const QString& ma
 				model_view_projection_matrix(i, j) = mvp_matrix[i+j*4];
 			}
 		}
-
-//		std::cout << "-----" << std::endl;
-//		std::cout << camera->getName().toStdString() << std::endl;
-//		std::cout << model_view_projection_matrix << std::endl;
-//		std::cout << "-----" << std::endl;t
 
 		model_view_projection_matrix.invert(model_view_projection_matrix_inv);
 
@@ -851,6 +851,8 @@ void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& map
 			CGoGNerr << "Unable to open file" << CGoGNendl;
 			return;
 		}
+
+		pixels = 1-(pixels.array()*2-1);
 
 		out << pixels;
 
