@@ -422,10 +422,18 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 			pixels = (pixels.array()*2-1);
 
-			unsigned int tmp_size = pixels.cols()*pixels.rows();
+			double min = pixels.minCoeff();
+			double max = pixels.maxCoeff();
 
-			out_file.write(reinterpret_cast<char*>(&tmp_size), sizeof(unsigned int));
-			out_file.write(reinterpret_cast<char*>(pixels.data()), sizeof(float)*tmp_size);
+//			pixels = (pixels.array())/(max-min);
+			pixels = pixels.array()/max;
+
+			unsigned int cols = pixels.cols();
+			unsigned int rows = pixels.rows();
+
+			out_file.write(reinterpret_cast<char*>(&cols), sizeof(unsigned int));
+			out_file.write(reinterpret_cast<char*>(&rows), sizeof(unsigned int));
+			out_file.write(reinterpret_cast<char*>(pixels.data()), sizeof(float)*cols*rows);
 
 			out_file.close();
 
@@ -436,17 +444,22 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 				return;
 			}
 
-			GLdouble mvp_matrix[16];
-			camera->getModelViewProjectionMatrix(mvp_matrix);
+			Eigen::Matrix<GLdouble, Eigen::Dynamic, Eigen::Dynamic> mvp_matrix_e(4, 4);
+			camera->getModelViewProjectionMatrix(mvp_matrix_e.data());
 
-			for(int i = 0; i < 4; ++i)
-			{
-				for(int j = 0; j < 4; ++j)
-				{
-					out_file << mvp_matrix[i+j*4] << " " << std::flush;
-				}
-				out_file << std::endl;
-			}
+			mvp_matrix_e = mvp_matrix_e.inverse();
+
+//			mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*(max-min);
+//			mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*(max-min);
+//			mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*(max-min);
+//			mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*(max-min);
+
+			mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*max;
+			mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*max;
+			mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*max;
+			mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*max;
+
+			out_file << mvp_matrix_e;
 
 			out_file.close();
 
@@ -844,40 +857,56 @@ void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& map
 
 		filename += mapName + "-" + QString::number(width) + "x" + QString::number(height) + "-" + QString::number(std::time(NULL));
 
-		std::ofstream out;
-		out.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::out);
-		if(!out.good())
+		std::ofstream out_file;
+		out_file.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::out);
+		if(!out_file.good())
 		{
 			CGoGNerr << "Unable to open file" << CGoGNendl;
 			return;
 		}
 
-		pixels = 1-(pixels.array()*2-1);
+		pixels = (pixels.array()*2-1);
 
-		out << pixels;
+		double min = pixels.minCoeff();
+		double max = pixels.maxCoeff();
 
-		out.close();
+//			pixels = (pixels.array())/(max-min);
+		pixels = pixels.array()/max;
 
-		out.open(filename.toStdString() + "-MVPMatrix.dat", std::ios::out);
-		if(!out.good())
+		unsigned int cols = pixels.cols();
+		unsigned int rows = pixels.rows();
+
+		out_file.write(reinterpret_cast<char*>(&cols), sizeof(unsigned int));
+		out_file.write(reinterpret_cast<char*>(&rows), sizeof(unsigned int));
+		out_file.write(reinterpret_cast<char*>(pixels.data()), sizeof(float)*cols*rows);
+
+		out_file.close();
+
+		out_file.open(filename.toStdString() + "-MVPMatrix.dat", std::ios::out);
+		if(!out_file.good())
 		{
 			CGoGNerr << "Unable to open file" << CGoGNendl;
 			return;
 		}
 
-		GLdouble mvp_matrix[16];
-		camera->getModelViewProjectionMatrix(mvp_matrix);
+		Eigen::Matrix<GLdouble, Eigen::Dynamic, Eigen::Dynamic> mvp_matrix_e(4, 4);
+		camera->getModelViewProjectionMatrix(mvp_matrix_e.data());
 
-		for(int i = 0; i < 4; ++i)
-		{
-			for(int j = 0; j < 4; ++j)
-			{
-				out << mvp_matrix[i+j*4] << " " << std::flush;
-			}
-			out << std::endl;
-		}
+		mvp_matrix_e = mvp_matrix_e.inverse();
 
-		out.close();
+//			mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*(max-min);
+//			mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*(max-min);
+//			mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*(max-min);
+//			mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*(max-min);
+
+		mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*max;
+		mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*max;
+		mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*max;
+		mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*max;
+
+		out_file << mvp_matrix_e;
+
+		out_file.close();
 	}
 }
 
