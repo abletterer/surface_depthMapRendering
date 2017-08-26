@@ -371,6 +371,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 		m_shaderSimpleColor->setAttributePosition(mapParams.positionVBO);
 
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels(height, width);
+		std::vector<float> colors(height*width*3, 0);
 
 		int total_sampling_time = 0, total_saving_time = 0;
 
@@ -391,6 +392,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 			glBindTexture(GL_TEXTURE_2D, *m_fbo->getDepthTexId());
 			glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
+			glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_FLOAT, colors.data());
 			m_fbo->unbind();
 
 			total_sampling_time += chrono.elapsed();
@@ -425,8 +427,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			double min = pixels.minCoeff();
 			double max = pixels.maxCoeff();
 
-//			pixels = (pixels.array())/(max-min);
-			pixels = pixels.array()/max;
+			pixels = (pixels.array())/(max-min);
 
 			unsigned int cols = pixels.cols();
 			unsigned int rows = pixels.rows();
@@ -434,6 +435,19 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			out_file.write(reinterpret_cast<char*>(&cols), sizeof(unsigned int));
 			out_file.write(reinterpret_cast<char*>(&rows), sizeof(unsigned int));
 			out_file.write(reinterpret_cast<char*>(pixels.data()), sizeof(float)*cols*rows);
+
+			out_file.close();
+
+			out_file.open(filename.toStdString() + "-originalColorMap.dat", std::ios::out);
+			if(!out_file.good())
+			{
+				CGoGNerr << "Unable to open file" << CGoGNendl;
+				return;
+			}
+
+			out_file.write(reinterpret_cast<char*>(&cols), sizeof(unsigned int));
+			out_file.write(reinterpret_cast<char*>(&rows), sizeof(unsigned int));
+			out_file.write(reinterpret_cast<char*>(colors.data()), sizeof(float)*cols*rows*3);
 
 			out_file.close();
 
@@ -449,15 +463,10 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 			mvp_matrix_e = mvp_matrix_e.inverse();
 
-//			mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*(max-min);
-//			mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*(max-min);
-//			mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*(max-min);
-//			mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*(max-min);
-
-			mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*max;
-			mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*max;
-			mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*max;
-			mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*max;
+			mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*(max-min);
+			mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*(max-min);
+			mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*(max-min);
+			mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*(max-min);
 
 			out_file << mvp_matrix_e;
 
@@ -841,6 +850,7 @@ void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& map
 		m_shaderSimpleColor->setAttributePosition(mh_map->getVBO(QString::fromStdString(position.name())));
 
 		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> pixels(height, width);
+		std::vector<float> colors(height*width*3, 0.);
 
 		m_fbo->bind();
 		glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
@@ -849,13 +859,16 @@ void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& map
 
 		glBindTexture(GL_TEXTURE_2D, *m_fbo->getDepthTexId());
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, pixels.data());
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_FLOAT, colors.data());
 		m_fbo->unbind();
 
+		std::time_t current_time = std::time(NULL);
+
 		QString filename(directory);
-		filename += "/" + mapName + "/";
+		filename += "/" + mapName + "/" + QString::number(current_time) + "/";
 		mkdir(filename.toStdString().c_str(), 0777);
 
-		filename += mapName + "-" + QString::number(width) + "x" + QString::number(height) + "-" + QString::number(std::time(NULL));
+		filename += mapName + "-" + QString::number(width) + "x" + QString::number(height) + "-" + QString::number(current_time);
 
 		std::ofstream out_file;
 		out_file.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::out);
@@ -870,8 +883,7 @@ void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& map
 		double min = pixels.minCoeff();
 		double max = pixels.maxCoeff();
 
-//			pixels = (pixels.array())/(max-min);
-		pixels = pixels.array()/max;
+		pixels = (pixels.array())/(max-min);
 
 		unsigned int cols = pixels.cols();
 		unsigned int rows = pixels.rows();
@@ -879,6 +891,19 @@ void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& map
 		out_file.write(reinterpret_cast<char*>(&cols), sizeof(unsigned int));
 		out_file.write(reinterpret_cast<char*>(&rows), sizeof(unsigned int));
 		out_file.write(reinterpret_cast<char*>(pixels.data()), sizeof(float)*cols*rows);
+
+		out_file.close();
+
+		out_file.open(filename.toStdString() + "-originalColorMap.dat", std::ios::out);
+		if(!out_file.good())
+		{
+			CGoGNerr << "Unable to open file" << CGoGNendl;
+			return;
+		}
+
+		out_file.write(reinterpret_cast<char*>(&cols), sizeof(unsigned int));
+		out_file.write(reinterpret_cast<char*>(&rows), sizeof(unsigned int));
+		out_file.write(reinterpret_cast<char*>(colors.data()), sizeof(float)*cols*rows*3);
 
 		out_file.close();
 
@@ -894,15 +919,10 @@ void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& map
 
 		mvp_matrix_e = mvp_matrix_e.inverse();
 
-//			mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*(max-min);
-//			mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*(max-min);
-//			mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*(max-min);
-//			mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*(max-min);
-
-		mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*max;
-		mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*max;
-		mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*max;
-		mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*max;
+		mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*(max-min);
+		mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*(max-min);
+		mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*(max-min);
+		mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*(max-min);
 
 		out_file << mvp_matrix_e;
 
