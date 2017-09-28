@@ -427,7 +427,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			double min = pixels.minCoeff();
 			double max = pixels.maxCoeff();
 
-			pixels = (pixels.array())/(max-min);
+//			pixels = (pixels.array())/(max-min);
 
 			unsigned int cols = pixels.cols();
 			unsigned int rows = pixels.rows();
@@ -451,24 +451,39 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 			out_file.close();
 
-			out_file.open(filename.toStdString() + "-MVPMatrix.dat", std::ios::out);
+			out_file.open(filename.toStdString() + "-MVMatrix.dat", std::ios::out);
 			if(!out_file.good())
 			{
 				CGoGNerr << "Unable to open file" << CGoGNendl;
 				return;
 			}
 
-			Eigen::Matrix<GLdouble, Eigen::Dynamic, Eigen::Dynamic> mvp_matrix_e(4, 4);
-			camera->getModelViewProjectionMatrix(mvp_matrix_e.data());
+			Eigen::Matrix<GLdouble, Eigen::Dynamic, Eigen::Dynamic> matrix(4, 4);
+			camera->getModelViewMatrix(matrix.data());
 
-			mvp_matrix_e = mvp_matrix_e.inverse();
+			matrix = matrix.inverse();
 
-			mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*(max-min);
-			mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*(max-min);
-			mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*(max-min);
-			mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*(max-min);
+			out_file << matrix;
 
-			out_file << mvp_matrix_e;
+			out_file.close();
+
+			out_file.open(filename.toStdString() + "-PMatrix.dat", std::ios::out);
+			if(!out_file.good())
+			{
+				CGoGNerr << "Unable to open file" << CGoGNendl;
+				return;
+			}
+
+			camera->getProjectionMatrix(matrix.data());
+
+			matrix = matrix.inverse();
+
+//			matrix(0, 2) = matrix(0, 2)*(max-min);
+//			matrix(1, 2) = matrix(1, 2)*(max-min);
+//			matrix(2, 2) = matrix(2, 2)*(max-min);
+//			matrix(3, 2) = matrix(3, 2)*(max-min);
+
+			out_file << matrix;
 
 			out_file.close();
 
@@ -907,24 +922,39 @@ void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& map
 
 		out_file.close();
 
-		out_file.open(filename.toStdString() + "-MVPMatrix.dat", std::ios::out);
+		out_file.open(filename.toStdString() + "-MVMatrix.dat", std::ios::out);
 		if(!out_file.good())
 		{
 			CGoGNerr << "Unable to open file" << CGoGNendl;
 			return;
 		}
 
-		Eigen::Matrix<GLdouble, Eigen::Dynamic, Eigen::Dynamic> mvp_matrix_e(4, 4);
-		camera->getModelViewProjectionMatrix(mvp_matrix_e.data());
+		Eigen::Matrix<GLdouble, Eigen::Dynamic, Eigen::Dynamic> matrix(4, 4);
+		camera->getModelViewMatrix(matrix.data());
 
-		mvp_matrix_e = mvp_matrix_e.inverse();
+		matrix = matrix.inverse();
 
-		mvp_matrix_e(0, 2) = mvp_matrix_e(0, 2)*(max-min);
-		mvp_matrix_e(1, 2) = mvp_matrix_e(1, 2)*(max-min);
-		mvp_matrix_e(2, 2) = mvp_matrix_e(2, 2)*(max-min);
-		mvp_matrix_e(3, 2) = mvp_matrix_e(3, 2)*(max-min);
+		out_file << matrix;
 
-		out_file << mvp_matrix_e;
+		out_file.close();
+
+		out_file.open(filename.toStdString() + "-PMatrix.dat", std::ios::out);
+		if(!out_file.good())
+		{
+			CGoGNerr << "Unable to open file" << CGoGNendl;
+			return;
+		}
+
+		camera->getProjectionMatrix(matrix.data());
+
+		matrix = matrix.inverse();
+
+//			matrix(0, 2) = matrix(0, 2)*(max-min);
+//			matrix(1, 2) = matrix(1, 2)*(max-min);
+//			matrix(2, 2) = matrix(2, 2)*(max-min);
+//			matrix(3, 2) = matrix(3, 2)*(max-min);
+
+		out_file << matrix;
 
 		out_file.close();
 	}
