@@ -277,7 +277,7 @@ void Surface_DepthMapRendering_Plugin::changePositionVBO(const QString& view, co
 	}
 }
 
-void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int nbMax)
+void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int nb_subdiv)
 {
 	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
 	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
@@ -288,23 +288,37 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 
 		MapParameters& mapParams = m_mapParameterSet[mhg_map];
 
+		std::vector<float> vertices;
+		std::vector<unsigned int> connectivity;
+		std::vector<uchar> colors;
+
+		readPly(vertices, connectivity, colors, "/Users/bletterer/Projets/Models/icosahedron_"+std::to_string(nb_subdiv)+".ply");
+
 		//Vertices coordinates of icosahedron -> regular sampling of a sphere
 		std::vector<qglviewer::Vec> positions;
-		positions.reserve(12);
-		positions.push_back(qglviewer::Vec(0,1,2));
-		positions.push_back(qglviewer::Vec(0,-1,2)); // Swap
-		positions.push_back(qglviewer::Vec(0,1,-2));	// Swap
-		positions.push_back(qglviewer::Vec(0,-1,-2));
+//		positions.reserve(12);
 
-		positions.push_back(qglviewer::Vec(1,2,0));
-		positions.push_back(qglviewer::Vec(1,-2,0));
-		positions.push_back(qglviewer::Vec(-1,2,0));
-		positions.push_back(qglviewer::Vec(-1,-2,0));
+		positions.reserve(vertices.size()/3);
 
-		positions.push_back(qglviewer::Vec(2,0,1));
-		positions.push_back(qglviewer::Vec(2,0,-1));
-		positions.push_back(qglviewer::Vec(-2,0,1));
-		positions.push_back(qglviewer::Vec(-2,0,-1));
+		for(int i = 0; i < vertices.size()/3; ++i)
+		{
+			positions.push_back(qglviewer::Vec(vertices[i*3]*2,vertices[i*3+1]*2,vertices[i*3+2]*2));
+		}
+
+//		positions.push_back(qglviewer::Vec(0,1,2));
+//		positions.push_back(qglviewer::Vec(0,-1,2)); // Swap
+//		positions.push_back(qglviewer::Vec(0,1,-2)); // Swap
+//		positions.push_back(qglviewer::Vec(0,-1,-2));
+
+//		positions.push_back(qglviewer::Vec(1,2,0));
+//		positions.push_back(qglviewer::Vec(1,-2,0));
+//		positions.push_back(qglviewer::Vec(-1,2,0));
+//		positions.push_back(qglviewer::Vec(-1,-2,0));
+
+//		positions.push_back(qglviewer::Vec(2,0,1));
+//		positions.push_back(qglviewer::Vec(2,0,-1));
+//		positions.push_back(qglviewer::Vec(-2,0,1));
+//		positions.push_back(qglviewer::Vec(-2,0,-1));
 
 		qglviewer::Vec bb_min, bb_max;
 
@@ -312,7 +326,7 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 
 		qglviewer::Vec center = (bb_min+bb_max)/2.f;
 
-		for(int i = 0; i < nbMax; ++i)
+		for(int i = 0; i < positions.size(); ++i)
 		{
 			QString cameraName(baseName);
 			cameraName.append(QString::number(i));
@@ -895,10 +909,10 @@ void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& map
 
 		pixels = (pixels.array()*2-1);
 
-		double min = pixels.minCoeff();
-		double max = pixels.maxCoeff();
+//		double min = pixels.minCoeff();
+//		double max = pixels.maxCoeff();
 
-		pixels = (pixels.array())/(max-min);
+//		pixels = (pixels.array())/(max-min);
 
 		unsigned int cols = pixels.cols();
 		unsigned int rows = pixels.rows();
