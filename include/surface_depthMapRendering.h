@@ -115,7 +115,7 @@ public slots: //Python calls
 
 	void changePositionVBO(const QString& view, const QString& map, const QString& vbo);
 
-	void createCameras(const QString& mapName, int nb_subdiv);
+	void createCameras(const QString& camera_directory, const QString& mapName, int nb_subdiv);
 	void render(const QString& mapName, const QString& directory);
 	void project2DImageTo3DSpace(const QString& mapOrigin, const QString& mapGenerated);
 	bool lowerResolution(const QString& mapOrigin, const QString& mapGenerated);

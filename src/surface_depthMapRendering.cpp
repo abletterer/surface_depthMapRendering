@@ -277,7 +277,7 @@ void Surface_DepthMapRendering_Plugin::changePositionVBO(const QString& view, co
 	}
 }
 
-void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int nb_subdiv)
+void Surface_DepthMapRendering_Plugin::createCameras(const QString& camera_directory, const QString& mapName, int nb_subdiv)
 {
 	MapHandlerGen* mhg_map = m_schnapps->getMap(mapName);
 	MapHandler<PFP2>* mh_map = static_cast<MapHandler<PFP2>*>(mhg_map);
@@ -292,7 +292,7 @@ void Surface_DepthMapRendering_Plugin::createCameras(const QString& mapName, int
 		std::vector<unsigned int> connectivity;
 		std::vector<uchar> colors;
 
-		readPly(vertices, connectivity, colors, "/Users/bletterer/Projets/Models/icosahedron_"+std::to_string(nb_subdiv)+".ply");
+		readPly(vertices, connectivity, colors, camera_directory.toStdString()+"/icosahedron_"+std::to_string(nb_subdiv)+".ply");
 
 		//Vertices coordinates of icosahedron -> regular sampling of a sphere
 		std::vector<qglviewer::Vec> positions;
@@ -418,7 +418,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			filename += "DepthMaps/";
 			mkdir(filename.toStdString().c_str(), 0777);
 
-			filename += QString::number(width) + "x" + QString::number(height) + "/";
+			filename += QString::number(width) + "x" + QString::number(height) + "_" + QString::number(mapParams.depthCameraSet.size()) + "/";
 			mkdir(filename.toStdString().c_str(), 0777);
 
 			filename += cameraName + "/";
