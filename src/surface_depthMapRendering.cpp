@@ -413,16 +413,16 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 
 			QString filename(directory);
 			filename += "/" + mapName + "/";
-			mkdir(filename.toStdString().c_str(), 0777);
+			createDirectory(filename);
 
 			filename += "DepthMaps/";
-			mkdir(filename.toStdString().c_str(), 0777);
+			createDirectory(filename);
 
 			filename += QString::number(width) + "x" + QString::number(height) + "_" + QString::number(mapParams.depthCameraSet.size()) + "/";
-			mkdir(filename.toStdString().c_str(), 0777);
+			createDirectory(filename);
 
 			filename += cameraName + "/";
-			mkdir(filename.toStdString().c_str(), 0777);
+			createDirectory(filename);
 
 			filename += mapName + "-" + QString::number(width) + "x" + QString::number(height) + "-" + cameraName;
 
@@ -817,13 +817,13 @@ bool Surface_DepthMapRendering_Plugin::savePointCloud(const QString& mapOrigin,
 
 		QString filename(directory);
 		filename += "/" + mapOrigin + "/";
-		mkdir(filename.toStdString().c_str(), 0777);
+		createDirectory(filename);
 
 		filename += "PointClouds/";
-		mkdir(filename.toStdString().c_str(), 0777);
+		createDirectory(filename);
 
 		filename += QString::number(m_fbo->getWidth()) + "x" + QString::number(m_fbo->getHeight()) + "/";
-		mkdir(filename.toStdString().c_str(), 0777);
+		createDirectory(filename);
 
 		filename += mapGenerated;
 
@@ -895,7 +895,7 @@ void Surface_DepthMapRendering_Plugin::saveDepthMapScreenshot(const QString& map
 
 		QString filename(directory);
 		filename += "/" + mapName + "/" + QString::number(current_time) + "/";
-		mkdir(filename.toStdString().c_str(), 0777);
+		createDirectory(filename);
 
 		filename += mapName + "-" + QString::number(width) + "x" + QString::number(height) + "-" + QString::number(current_time);
 
@@ -994,13 +994,13 @@ bool Surface_DepthMapRendering_Plugin::saveOriginalDepthMap(const QString& mapOr
 
 		QString filename(directory);
 		filename += "/" + mapOrigin + "/";
-		mkdir(filename.toStdString().c_str(), 0777);
+		createDirectory(filename);
 
 		filename += "DepthMaps/";
-		mkdir(filename.toStdString().c_str(), 0777);
+		createDirectory(filename);
 
 		filename += QString::number(width) + "x" + QString::number(height) + "/";
-		mkdir(filename.toStdString().c_str(), 0777);
+		createDirectory(filename);
 
 		filename += mapGenerated;
 
@@ -1086,13 +1086,13 @@ bool Surface_DepthMapRendering_Plugin::saveModifiedDepthMap(const QString& mapOr
 
 		QString filename(directory);
 		filename += "/" + mapOrigin + "/";
-		mkdir(filename.toStdString().c_str(), 0777);
+		createDirectory(filename);
 
 		filename += "DepthMaps/";
-		mkdir(filename.toStdString().c_str(), 0777);
+		createDirectory(filename);
 
 		filename += QString::number(width) + "x" + QString::number(height) + "/";
-		mkdir(filename.toStdString().c_str(), 0777);
+		createDirectory(filename);
 
 		filename += mapGenerated + "-modifiedDepthMap-radius_"+QString::number(radius);
 
@@ -1213,13 +1213,13 @@ bool Surface_DepthMapRendering_Plugin::saveMergedPointCloud(const QString& mapOr
 
 			QString filename(directory);
 			filename += "/" + mapOrigin + "/";
-			mkdir(filename.toStdString().c_str(), 0777);
+			createDirectory(filename);
 
 			filename += "PointClouds/";
-			mkdir(filename.toStdString().c_str(), 0777);
+			createDirectory(filename);
 
 			filename += QString::number(width) + "x" + QString::number(height) + "/";
-			mkdir(filename.toStdString().c_str(), 0777);
+			createDirectory(filename);
 
 			if(m_correspondance_done)
 			{
@@ -1262,7 +1262,7 @@ void Surface_DepthMapRendering_Plugin::exportModelPly(const QString& mapName, co
 
 		QString filename(directory);
 		filename += "/" + mapName + "/";
-		mkdir(filename.toStdString().c_str(), 0777);
+		createDirectory(filename);
 
 		filename += mapName + ".ply";
 
