@@ -403,7 +403,7 @@ private:
 
 	CGoGN::Utils::FBO* m_fbo;
 	CGoGN::Utils::ShaderSimpleColor* m_shaderSimpleColor;
-	CGoGN::Utils::ShaderScalarFieldReal* m_shaderScalarFieldReal;
+    CGoGN::Utils::ShaderScalarFieldReal* m_shaderScalarFieldReal;
 
 	bool m_draw;
 	bool m_correspondance_done;
