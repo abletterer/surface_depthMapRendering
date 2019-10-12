@@ -24,21 +24,13 @@
 #include <thread>
 #include <QFileDialog>
 
-void createDirectory(const QString& filename)
-{
-	#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
-		CreateDirectory(filename.toStdString().c_str(), NULL);
-	#else
-		mkdir(filename.toStdString().c_str(), 0777);
-	#endif defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
-}
-
-
 namespace CGoGN
 {
 
 namespace SCHNApps
 {
+
+	void createDirectory(const QString& filename);
 
 struct MapParameters
 {
@@ -412,7 +404,7 @@ private:
 
 	CGoGN::Utils::FBO* m_fbo;
 	CGoGN::Utils::ShaderSimpleColor* m_shaderSimpleColor;
-	CGoGN::Utils::ShaderScalarFieldReal* m_shaderScalarFieldReal;
+	//CGoGN::Utils::ShaderScalarFieldReal* m_shaderScalarFieldReal;
 
 	bool m_draw;
 	bool m_correspondance_done;
