@@ -32,10 +32,10 @@ bool Surface_DepthMapRendering_Plugin::enable()
 	m_fbo = NULL;
 
 	m_shaderSimpleColor = new CGoGN::Utils::ShaderSimpleColor();
-	//m_shaderScalarFieldReal = new CGoGN::Utils::ShaderScalarFieldReal();
+    m_shaderScalarFieldReal = new CGoGN::Utils::ShaderScalarFieldReal();
 
 	registerShader(m_shaderSimpleColor);
-	//registerShader(m_shaderScalarFieldReal);
+    registerShader(m_shaderScalarFieldReal);
 
 	connect(m_depthMapRenderingAction, SIGNAL(triggered()), this, SLOT(openDepthMapRenderingDialog()));
 
@@ -61,10 +61,10 @@ void Surface_DepthMapRendering_Plugin::disable()
 	{
 		delete m_shaderSimpleColor;
 	}
-	//if(m_shaderScalarFieldReal)
-	//{
-		//delete m_shaderScalarFieldReal;
-	//}
+    if(m_shaderScalarFieldReal)
+    {
+        delete m_shaderScalarFieldReal;
+    }
 	if(m_fbo)
 	{
 		delete m_fbo;
@@ -1554,105 +1554,145 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 	}
 }
 
-//void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated, int criteria)
-//{
-//	MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
-//	MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
-//
-//	MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
-//	MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
-//
-//	if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
-//	{
-//		CGoGNout << "Visibilité des points de la carte " << mapGenerated.toStdString() << " .." << CGoGNflush;
-//		Utils::Chrono chrono;
-//		chrono.start();
-//
-//		MapParameters& mapParams = m_mapParameterSet[mh_origin];
-//
-//		Camera* camera = mapParams.depthCameraSet[mapGenerated];
-//		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& depthImage = mapParams.depthImageSet[mapGenerated];
-//		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& newDepthImage = mapParams.newDepthImageSet[mapGenerated];
-//		newDepthImage = Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>(depthImage);
-//
-//		PFP2::MAP* generated_map = mh_generated->getMap();
-//		VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
-//		VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
-////		VertexAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, PFP2::MAP> correspondingPointsAttribute
-////				= mh_generated->addAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, VERTEX>("CorrespondingPoints");
-//		const int width = m_fbo->getWidth(), height = m_fbo->getHeight();
-//
-//
-//		VertexAttribute<float, PFP2::MAP> criteriaAttribute;
-//
-//		switch(criteria)
-//		{
-//			case DENSITY:
-//				criteriaAttribute = mh_generated->getAttribute<float, VERTEX>("SamplingDensity");
-//				break;
-//			case VISIBILITY:
-//				criteriaAttribute = mh_generated->getAttribute<float, VERTEX>("VisibilityConfidence");
-//				break;
-//			default:
-//				break;
-//		}
-//
-//		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> currentDepthImage;
-//		currentDepthImage.setOnes(width, height);
-//		Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> labelValues;
-//		labelValues.setZero(width, height);
-//		Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> maxConfidenceValues;
-//		maxConfidenceValues.setZero(width, height);
-//		Eigen::Matrix<Dart, Eigen::Dynamic, Eigen::Dynamic> imageDarts;
-//		imageDarts.setZero(width, height);
-//
-//		TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
-//		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
-//		{
-//			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
-//			imageDarts(x, y) = d;
-//		}
-//
-//		//Change current rendering camera, and reposition it correctly
-//		qglviewer::Vec camera_position = camera->position();
-//		m_schnapps->getSelectedView()->setCurrentCamera(camera);
-//		camera->setPosition(camera_position);
-//
-//		float z_near = camera->zNear(), z_far = camera->zFar();
-//
-//		/*
-//		 * z_w = valeur de profondeur de l'image ; dans l'intervalle [0;1]
-//		 * n = distance non signée du zNear à la caméra
-//		 *
-//		 * f = distance non signée du zFar à la caméra
-//		 * p = (f*n)/(z_w*(f-n)-f) => Fonction qui calcule la distance d'un point à la caméra, selon la valeur de profondeur de la carte de profondeur
-//		 * - ((f*n) * (f-n)) / ((z_w*(f-n)-f)*(z_w*(f-n)-f)) => Dérivée 1ère de la fonction précédente
-//		 * z_w = (f*(p+n))/(p*(f-n)) => Fonction inverse qui pour une distance d'un point à la caméra, donne sa valeur de profondeur
-//		 */
-//
-//		const float threshold = 1/64.f;
-//
-////		std::vector<Dart> tmp_vector;
-////		tmp_vector.resize(11);
-//
-////		std::vector<std::vector<Dart>> correspondingPoints;
-////		correspondingPoints.resize(width*height, tmp_vector);
-//
-////		std::vector<MapHandlerGen*> vec_maps;
-////		vec_maps.reserve(11);
-//
-//		for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
-//		{
-//			if(it.value() != mhg_generated)
-//			{
-//				MapHandler<PFP2>* mh_current = static_cast<MapHandler<PFP2>*>(it.value());
-//
-//				m_shaderScalarFieldReal->setAttributePosition(mh_current->getVBO("position"));
-//				m_shaderScalarFieldReal->setAttributeScalar(mh_current->getVBO("Label"));
-//
-//				VertexAttribute<float, PFP2::MAP> criteriaAttributeCurrent;
-//
-//				switch(criteria)
+void Surface_DepthMapRendering_Plugin::findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated, int criteria)
+{
+    MapHandlerGen* mhg_origin = m_schnapps->getMap(mapOrigin);
+    MapHandler<PFP2>* mh_origin = static_cast<MapHandler<PFP2>*>(mhg_origin);
+
+    MapHandlerGen* mhg_generated = m_schnapps->getMap(mapGenerated);
+    MapHandler<PFP2>* mh_generated = static_cast<MapHandler<PFP2>*>(mhg_generated);
+
+    if(mh_origin && mh_generated && m_mapParameterSet.contains(mh_origin))
+    {
+        CGoGNout << "Visibilité des points de la carte " << mapGenerated.toStdString() << " .." << CGoGNflush;
+        Utils::Chrono chrono;
+        chrono.start();
+
+        MapParameters& mapParams = m_mapParameterSet[mh_origin];
+
+        Camera* camera = mapParams.depthCameraSet[mapGenerated];
+        Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& depthImage = mapParams.depthImageSet[mapGenerated];
+        Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>& newDepthImage = mapParams.newDepthImageSet[mapGenerated];
+        newDepthImage = Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic>(depthImage);
+
+        PFP2::MAP* generated_map = mh_generated->getMap();
+        VertexAttribute<PFP2::VEC3, PFP2::MAP> position = mh_generated->getAttribute<PFP2::VEC3, VERTEX>("position");
+        VertexAttribute<ImageCoordinates, PFP2::MAP> imageCoordinates = mh_generated->getAttribute<ImageCoordinates, VERTEX>("ImageCoordinates");
+//		VertexAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, PFP2::MAP> correspondingPointsAttribute
+//				= mh_generated->addAttribute<NoTypeNameAttribute<std::vector<PointCorrespondance>>, VERTEX>("CorrespondingPoints");
+        const int width = m_fbo->getWidth(), height = m_fbo->getHeight();
+
+
+        VertexAttribute<float, PFP2::MAP> criteriaAttribute;
+
+        switch(criteria)
+        {
+            case DENSITY:
+                criteriaAttribute = mh_generated->getAttribute<float, VERTEX>("SamplingDensity");
+                break;
+            case VISIBILITY:
+                criteriaAttribute = mh_generated->getAttribute<float, VERTEX>("VisibilityConfidence");
+                break;
+            default:
+                break;
+        }
+
+        Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> currentDepthImage;
+        currentDepthImage.setOnes(width, height);
+        Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic> labelValues;
+        labelValues.setZero(width, height);
+        Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> maxConfidenceValues;
+        maxConfidenceValues.setZero(width, height);
+        Eigen::Matrix<Dart, Eigen::Dynamic, Eigen::Dynamic> imageDarts;
+        imageDarts.setZero(width, height);
+
+        TraversorV<PFP2::MAP> trav_vert_map(*generated_map);
+        for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
+        {
+            int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
+            imageDarts(x, y) = d;
+        }
+
+        //Change current rendering camera, and reposition it correctly
+        qglviewer::Vec camera_position = camera->position();
+        m_schnapps->getSelectedView()->setCurrentCamera(camera);
+        camera->setPosition(camera_position);
+
+        float z_near = camera->zNear(), z_far = camera->zFar();
+
+        /*
+         * z_w = valeur de profondeur de l'image ; dans l'intervalle [0;1]
+         * n = distance non signée du zNear à la caméra
+         *
+         * f = distance non signée du zFar à la caméra
+         * p = (f*n)/(z_w*(f-n)-f) => Fonction qui calcule la distance d'un point à la caméra, selon la valeur de profondeur de la carte de profondeur
+         * - ((f*n) * (f-n)) / ((z_w*(f-n)-f)*(z_w*(f-n)-f)) => Dérivée 1ère de la fonction précédente
+         * z_w = (f*(p+n))/(p*(f-n)) => Fonction inverse qui pour une distance d'un point à la caméra, donne sa valeur de profondeur
+         */
+
+        const float threshold = 1/64.f;
+
+//		std::vector<Dart> tmp_vector;
+//		tmp_vector.resize(11);
+
+//		std::vector<std::vector<Dart>> correspondingPoints;
+//		correspondingPoints.resize(width*height, tmp_vector);
+
+//		std::vector<MapHandlerGen*> vec_maps;
+//		vec_maps.reserve(11);
+
+        for(QHash<QString, MapHandlerGen*>::iterator it = mapParams.projectedMapSet.begin(); it != mapParams.projectedMapSet.end(); ++it)
+        {
+            if(it.value() != mhg_generated)
+            {
+                MapHandler<PFP2>* mh_current = static_cast<MapHandler<PFP2>*>(it.value());
+
+                m_shaderScalarFieldReal->setAttributePosition(mh_current->getVBO("position"));
+                m_shaderScalarFieldReal->setAttributeScalar(mh_current->getVBO("Label"));
+
+                VertexAttribute<float, PFP2::MAP> criteriaAttributeCurrent;
+
+                switch(criteria)
+                {
+                    case DENSITY:
+                        criteriaAttributeCurrent = mh_current->getAttribute<float, VERTEX>("SamplingDensity");
+                        break;
+                    case VISIBILITY:
+                        criteriaAttributeCurrent = mh_current->getAttribute<float, VERTEX>("VisibilityConfidence");
+                        break;
+                    default:
+                        break;
+                }
+
+//				VertexAttribute<PFP2::VEC3, PFP2::MAP> positionCurrent = mh_current->getAttribute<PFP2::VEC3, VERTEX>("position");
+
+                m_fbo->bind();
+                glClear ( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	//To clean the color and depth textures
+
+                mh_current->draw(m_shaderScalarFieldReal, CGoGN::Algo::Render::GL2::POINTS);
+
+                glEnable(GL_TEXTURE_2D);
+
+                glBindTexture(GL_TEXTURE_2D, *m_fbo->getDepthTexId());
+                glGetTexImage(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, GL_FLOAT, currentDepthImage.data());
+
+                glBindTexture(GL_TEXTURE_2D, *m_fbo->getColorTexId(0));
+                glGetTexImage(GL_TEXTURE_2D, 0, GL_RED, GL_FLOAT, labelValues.data());
+
+                glDisable(GL_TEXTURE_2D);
+                m_fbo->unbind();
+
+//				Eigen::Matrix<GLfloat, Eigen::Dynamic, Eigen::Dynamic> copyImage(currentDepthImage);
+
+//				currentDepthImage = currentDepthImage.array()*2-1;    //Set range to [-1;1]
+
+                currentDepthImage = (depthImage.array()-currentDepthImage.array()).abs();
+
+//				currentDepthImage = (z_far*z_near)/(((currentDepthImage.array()+1)/2)*(z_far-z_near)+z_far);
+
+//				int count = 0, count_0 = 0;
+
+//				for(int i = 0; i < currentDepthImage.rows(); ++i)
 //				{
 //					case DENSITY:
 //						criteriaAttributeCurrent = mh_current->getAttribute<float, VERTEX>("SamplingDensity");
@@ -1756,37 +1796,64 @@ void Surface_DepthMapRendering_Plugin::densityEstimation(const QString& mapOrigi
 //						}
 //					}
 //				}
-////				vec_maps.push_back(it.value());
-//			}
-//		}
-//
-//		m_schnapps->getSelectedView()->setCurrentCamera("camera_0");
-//
-//		for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
-//		{
-//			int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
-////			correspondingPointsAttribute[d].reserve(11);
-////			for(unsigned int i = 0; i < vec_maps.size(); ++i)
-////			{
-////				if(vec_maps[i] != mhg_generated && correspondingPoints[x+y*width][i] != Dart::nil())
-////				{
-////					PointCorrespondance tmp;
-////					tmp.map = vec_maps[i];
-////					tmp.vertex = correspondingPoints[x+y*width][i];
-////					correspondingPointsAttribute[d].push_back(tmp);
-////				}
-////			}
-//			if(criteriaAttribute[d] < maxConfidenceValues(x, y))
+
+//				image.save("/home/blettere/Projets/Test/Images/"+mapGenerated+"-"+mh_current->getName()+".png");
+
+//				unsigned int size = vec_maps.size();
+
+                #pragma omp parallel for
+                for(int i = 0; i < currentDepthImage.rows(); ++i)
+                {
+                    for(int j = 0; j < currentDepthImage.cols(); ++j)
+                    {
+                        //Si un point s'est projeté sur ce pixel
+                        Dart d = Dart::create(labelValues(i, j));
+                        if(d != Dart::nil() && d.label() < 4000000000)
+                        {
+                            //Dummy test to avoid problems
+
+//							correspondingPoints[i+j*width][size] = Dart::nil();
+
+//							float d_o = (z_far*z_near)/(((depthImage(i, j)+1)/2)*(z_far-z_near)+z_far);
+
+//							CGoGNout << fabs(d_o-currentDepthImage(i, j)) << CGoGNendl;
+
+//							if(fabs(1-depthImage(i, j)) > FLT_EPSILON && fabs(d_o-currentDepthImage(i, j)) < threshold)
+                            if(fabs(1-depthImage(i, j)) > FLT_EPSILON && currentDepthImage(i, j) < threshold)
+                            {
+//								correspondingPoints[i+j*width][size] = d;
+                                maxConfidenceValues(i, j) = std::max(maxConfidenceValues(i, j), criteriaAttributeCurrent[d]);
+                            }
+                        }
+                    }
+                }
+//				vec_maps.push_back(it.value());
+            }
+        }
+
+        m_schnapps->getSelectedView()->setCurrentCamera("camera_0");
+
+        for(Dart d = trav_vert_map.begin(); d != trav_vert_map.end(); d = trav_vert_map.next())
+        {
+            int x = imageCoordinates[d].getXCoordinate(), y = imageCoordinates[d].getYCoordinate();
+//			correspondingPointsAttribute[d].reserve(11);
+//			for(unsigned int i = 0; i < vec_maps.size(); ++i)
 //			{
 //				//Suppression du point dans la nouvelle carte de profondeur (pour ne pas influer les comparaisons futures)
 //				newDepthImage(x, y) = 1.f;
 ////				depthImage(x, y) = 1.f;
 //			}
-//		}
-////		deleteBackground(mapOrigin, mapGenerated);
-//		mh_generated->notifyAttributeModification(criteriaAttribute, false);
-//	}
-//}
+            if(criteriaAttribute[d] < maxConfidenceValues(x, y))
+            {
+                //Suppression du point dans la nouvelle carte de profondeur (pour ne pas influer les comparaisons futures)
+                newDepthImage(x, y) = 1.f;
+//				depthImage(x, y) = 1.f;
+            }
+        }
+//		deleteBackground(mapOrigin, mapGenerated);
+        mh_generated->notifyAttributeModification(criteriaAttribute, false);
+    }
+}
 
 void Surface_DepthMapRendering_Plugin::updateDepthImages(const QString& mapOrigin)
 {
