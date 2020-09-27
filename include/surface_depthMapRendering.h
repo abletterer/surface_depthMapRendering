@@ -24,14 +24,13 @@
 #include <thread>
 #include <QFileDialog>
 
-void createDirectory(const QString& filename);
-
-
 namespace CGoGN
 {
 
 namespace SCHNApps
 {
+
+	void createDirectory(const QString& filename);
 
 struct MapParameters
 {
@@ -144,7 +143,7 @@ public slots: //Python calls
 	void normalEstimation(const QString& mapOrigin, const QString& mapGenerated);
 	void confidenceEstimation(const QString& mapOrigin, const QString& mapGenerated);
 	void densityEstimation(const QString& mapOrigin, const QString& mapGenerated, const float radius);
-	void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated, const int criteria=DENSITY);
+	//void findCorrespondingPoints(const QString& mapOrigin, const QString& mapGenerated, const int criteria=DENSITY);
 
 	void updateDepthImages(const QString& mapOrigin);
 
@@ -406,7 +405,7 @@ private:
 	CGoGN::Utils::FBO* m_fbo;
 	CGoGN::Utils::ShaderSimpleColor* m_shaderSimpleColor;
     CGoGN::Utils::ShaderScalarFieldReal* m_shaderScalarFieldReal;
-
+	
 	bool m_draw;
 	bool m_correspondance_done;
 
