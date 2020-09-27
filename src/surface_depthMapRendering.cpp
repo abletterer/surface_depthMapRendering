@@ -2,6 +2,15 @@
 
 #include "mapHandler.h"
 
+void createDirectory(const QString& filename)
+{
+	#if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
+		CreateDirectory(filename.toStdString().c_str(), NULL);
+	#else
+		mkdir(filename.toStdString().c_str(), 0777);
+	#endif defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
+}
+
 namespace CGoGN
 {
 
@@ -429,7 +438,7 @@ void Surface_DepthMapRendering_Plugin::render(const QString& mapName, const QStr
 			chrono.start();
 
 			std::ofstream out_file;
-			out_file.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::binary);
+            out_file.open(filename.toStdString() + "-originalDepthMap.dat", std::ios::out);
 			if(!out_file.good())
 			{
 				CGoGNerr << "Unable to open file" << CGoGNendl;

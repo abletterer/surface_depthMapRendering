@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 
 SET( PLUGIN_NAME Surface_DepthMapRendering )
 
-SET( PLUGIN_ROOT_DIR ${SCHNApps_ROOT_DIR}/../../Plugins/surface_depthMapRendering)
+SET( PLUGIN_ROOT_DIR ${SCHNApps_ROOT_DIR}/../../external/Plugins/surface_depthMapRendering)
 
 INCLUDE_DIRECTORIES(
 	${PLUGIN_ROOT_DIR}/include
